@@ -5,7 +5,7 @@ import os
 import sys
 import subprocess
 import fnmatch
-import json
+import ujson as json
 import gensim
 from nltk.tokenize import TweetTokenizer
 
