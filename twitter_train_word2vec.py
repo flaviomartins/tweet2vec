@@ -1,21 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import tarfile
-import bz2
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-import fnmatch
 import os
 import sys
+import subprocess
+import fnmatch
 import json
 import gensim
 from nltk.tokenize import TweetTokenizer
 
 import logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+
+
+if sys.version.startswith("3"):
+    import io
+    io_method = io.BytesIO
+else:
+    try:
+        from cStringIO import StringIO
+    except ImportError:
+        from StringIO import StringIO
+    io_method = StringIO
 
 
 class MultipleFileSentences(object):
@@ -26,22 +32,20 @@ class MultipleFileSentences(object):
     def __iter__(self):
         for root, dirnames, filenames in os.walk(self.basedir):
             for filename in fnmatch.filter(filenames, '*.tar'):
-                with tarfile.open(os.path.join(root, filename), 'r') as tar:
-                    for tarinfo in tar:
-                        print tarinfo
-                        if tarinfo.isfile() and os.path.splitext(tarinfo.name)[1] == ".bz2":
-                            f = tar.extractfile(tarinfo.name)
-                            content = StringIO(bz2.decompress(f.read()))
-                            line = content.readline()
-                            while line != '':
-                                try:
-                                    data = json.loads(line)
-                                    if 'text' in data:
-                                        yield self.tokenizer.tokenize(data['text'])
-                                except ValueError:
-                                    pass
-                                line = content.readline()
-                            f.close()
+                fullfn = os.path.join(root, filename)
+                p1 = subprocess.Popen(['tar', 'xfO', fullfn, '--wildcards', '*.bz2'], bufsize=-1, stdout=subprocess.PIPE)
+                p2 = subprocess.Popen(['bzcat'], bufsize=-1, stdin=p1.stdout, stdout=subprocess.PIPE)
+                p1.stdout.close()
+                fh = io_method(p2.communicate()[0])
+                assert p2.returncode == 0
+
+                for line in fh:
+                    try:
+                        data = json.loads(line)
+                        if 'text' in data:
+                            yield self.tokenizer.tokenize(data['text'])
+                    except ValueError:
+                        pass
 
 
 if __name__ == '__main__':
