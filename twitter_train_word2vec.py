@@ -63,7 +63,7 @@ class MultipleFileSentences(object):
 
                 if self.method == NATIVE_METHOD:
                     p1 = subprocess.Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], stdout=subprocess.PIPE)
-                    p2 = subprocess.Popen([self.command, '-d'], stdin=p1.stdout, stdout=subprocess.PIPE)
+                    p2 = subprocess.Popen([self.command, '-dc'], stdin=p1.stdout, stdout=subprocess.PIPE)
                     p1.stdout.close()
                     content = io_method(p2.communicate()[0])
                     assert p2.returncode == 0
