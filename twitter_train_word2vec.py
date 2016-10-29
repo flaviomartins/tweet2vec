@@ -36,6 +36,14 @@ class MultipleFileSentences(object):
             self.command = 'bzip2'
         print 'will use ' + self.command
 
+    @staticmethod
+    def my_json_load(f):
+        try:
+            data = json.load(f)
+        except ValueError:
+            data = ''
+        return data
+
     def __iter__(self):
         for root, dirnames, filenames in os.walk(self.basedir):
             for filename in fnmatch.filter(filenames, '*.tar'):
@@ -49,7 +57,7 @@ class MultipleFileSentences(object):
 
                 for line in fh:
                     try:
-                        data = json.loads(line)
+                        data = self.my_json_load(line)
                         if 'text' in data:
                             yield self.tokenizer.tokenize(data['text'])
                     except ValueError:
