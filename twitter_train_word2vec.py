@@ -57,7 +57,7 @@ class MultipleFileSentences(object):
 
     def __iter__(self):
         for root, dirnames, filenames in os.walk(self.basedir):
-            for filename in fnmatch.filter(filenames, '*.tar'):
+            for filename in sorted(fnmatch.filter(filenames, '*.tar')):
                 fullfn = os.path.join(root, filename)
                 print fullfn
 
