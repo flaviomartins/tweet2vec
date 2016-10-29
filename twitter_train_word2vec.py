@@ -28,13 +28,21 @@ class MultipleFileSentences(object):
     def __init__(self, basedir):
         self.basedir = basedir
         self.tokenizer = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
+        self.command = 'pbzip2'
+        try:
+            subprocess.Popen(['pbzip2', '--version'])
+        except OSError:
+            subprocess.Popen(['bzip2', '--version'])
+            self.command = 'bzip2'
+        print 'will use ' + self.command
 
     def __iter__(self):
         for root, dirnames, filenames in os.walk(self.basedir):
             for filename in fnmatch.filter(filenames, '*.tar'):
                 fullfn = os.path.join(root, filename)
-                p1 = subprocess.Popen(['tar', 'xfO', fullfn, '--wildcards', '*.bz2'], bufsize=-1, stdout=subprocess.PIPE)
-                p2 = subprocess.Popen(['bzcat'], bufsize=-1, stdin=p1.stdout, stdout=subprocess.PIPE)
+                print fullfn
+                p1 = subprocess.Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], stdout=subprocess.PIPE)
+                p2 = subprocess.Popen([self.command, '-d'], stdin=p1.stdout, stdout=subprocess.PIPE)
                 p1.stdout.close()
                 fh = io_method(p2.communicate()[0])
                 assert p2.returncode == 0
