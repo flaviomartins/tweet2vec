@@ -3,7 +3,7 @@
 
 import os
 import sys
-import subprocess
+from subprocess import PIPE, Popen
 import fnmatch
 import tarfile
 import bz2
@@ -37,10 +37,10 @@ class MultipleFileSentences(object):
         self.method = NATIVE_METHOD
         self.command = 'pbzip2'
         try:
-            subprocess.Popen(['pbzip2', '--version'])
+            Popen(['pbzip2', '--version'])
         except OSError:
             try:
-                subprocess.Popen(['bzip2', '--version'])
+                Popen(['bzip2', '--version'])
                 self.command = 'bzip2'
             except OSError:
                 self.method = COMPAT_METHOD
@@ -62,15 +62,17 @@ class MultipleFileSentences(object):
                 print fullfn
 
                 if self.method == NATIVE_METHOD:
-                    p1 = subprocess.Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], stdout=subprocess.PIPE)
-                    p2 = subprocess.Popen([self.command, '-dc'], stdin=p1.stdout, stdout=subprocess.PIPE)
+                    p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=-1, stdout=PIPE)
+                    p2 = Popen([self.command, '-dc'], bufsize=-1, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
-                    content = io_method(p2.communicate()[0])
-                    assert p2.returncode == 0
-                    for line in content:
-                        data = self.my_json_loads(line)
-                        if 'text' in data:
-                            yield self.tokenizer.tokenize(data['text'])
+                    while True:
+                        line = p2.stdout.readline()
+                        if line != '':
+                            data = self.my_json_loads(line)
+                            if 'text' in data:
+                                yield self.tokenizer.tokenize(data['text'])
+                        else:
+                            break
                 else:
                     with tarfile.open(fullfn, 'r') as tar:
                         for tarinfo in tar:
