@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function, unicode_literals, division
+import io
 import os
 import sys
 from subprocess import PIPE, Popen
@@ -16,17 +18,6 @@ from nltk.tokenize import TweetTokenizer
 
 import logging
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-
-
-if sys.version.startswith("3"):
-    import io
-    io_method = io.BytesIO
-else:
-    try:
-        from cStringIO import StringIO
-    except ImportError:
-        from StringIO import StringIO
-    io_method = StringIO
 
 
 NATIVE_METHOD = 'native'
@@ -49,7 +40,7 @@ class MultipleFileSentences(object):
             except OSError:
                 self.method = COMPAT_METHOD
                 self.command = 'python tarfile/bz2'
-        print 'method: ' + self.method + '\nusing: ' + self.command
+        print('method: ' + self.method + '\nusing: ' + self.command)
 
     @staticmethod
     def my_json_loads(content):
@@ -63,7 +54,7 @@ class MultipleFileSentences(object):
         for root, dirnames, filenames in os.walk(self.basedir):
             for filename in sorted(fnmatch.filter(filenames, '*.tar')):
                 fullfn = os.path.join(root, filename)
-                print fullfn
+                print(fullfn)
 
                 if self.method == NATIVE_METHOD:
                     p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
@@ -91,7 +82,7 @@ class MultipleFileSentences(object):
 
 if __name__ == '__main__':
     if len(sys.argv) < 3:
-        print "Usage: train_word2vec.py <inputfile> <modelname>"
+        print("Usage: train_word2vec.py <inputfile> <modelname>")
         sys.exit(0)
 
     inputfile = sys.argv[1]
