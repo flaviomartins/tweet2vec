@@ -7,8 +7,11 @@ from subprocess import PIPE, Popen
 import fnmatch
 import tarfile
 import bz2
-import ujson as json
-import gensim
+try:
+    import ujson as json
+except ImportError:
+    import json
+from gensim.models import Word2Vec
 from nltk.tokenize import TweetTokenizer
 
 import logging
@@ -93,6 +96,6 @@ if __name__ == '__main__':
     inputfile = sys.argv[1]
     modelname = sys.argv[2]
     sentences = MultipleFileSentences(inputfile)
-    model = gensim.models.Word2Vec(sentences, size=200, window=10, min_count=10,
-                                   workers=4, iter=1, sorted_vocab=1)
+    model = Word2Vec(sentences, size=200, window=10, min_count=10,
+                     workers=8, iter=2, sorted_vocab=1)
     model.save(modelname)
