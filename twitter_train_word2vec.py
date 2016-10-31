@@ -31,6 +31,7 @@ else:
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
+BUFSIZE = 32 * 1024**2
 
 
 class MultipleFileSentences(object):
@@ -65,8 +66,8 @@ class MultipleFileSentences(object):
                 print fullfn
 
                 if self.method == NATIVE_METHOD:
-                    p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=-1, stdout=PIPE)
-                    p2 = Popen([self.command, '-dc'], bufsize=-1, stdin=p1.stdout, stdout=PIPE)
+                    p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
+                    p2 = Popen([self.command, '-dc'], bufsize=BUFSIZE, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
                     while True:
                         line = p2.stdout.readline()
