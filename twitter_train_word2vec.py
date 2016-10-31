@@ -3,31 +3,40 @@
 
 from __future__ import print_function, unicode_literals, division
 import io
-import os
-import sys
-from subprocess import PIPE, Popen
-import fnmatch
 import tarfile
 import bz2
+from subprocess import PIPE, Popen
+import logging
+from os import path
+import os
+import fnmatch
+from collections import defaultdict
+
+import sys
 try:
     import ujson as json
 except ImportError:
     import json
 from gensim.models import Word2Vec
+from preshed.counter import PreshCounter
+from spacy.strings import hash_string
 from nltk.tokenize import TweetTokenizer
 
-import logging
-logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
 BUFSIZE = 64 * 1024**2
+PROGRESS_PER = 10000
 
 
 class MultipleFileSentences(object):
-    def __init__(self, basedir):
-        self.basedir = basedir
+    def __init__(self, directory, min_freq=10):
+        self.directory = directory
+        self.counts = PreshCounter()
+        self.strings = {}
+        self.min_freq = min_freq
         self.tokenizer = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
         self.method = NATIVE_METHOD
         self.command = 'pbzip2'
@@ -50,10 +59,30 @@ class MultipleFileSentences(object):
             data = ''
         return data
 
+    def count_doc(self, words):
+        # Get counts for this document
+        doc_counts = PreshCounter()
+        doc_strings = {}
+        for word in words:
+            key = hash_string(word)
+            doc_counts.inc(key, 1)
+            doc_strings[key] = word
+
+        n = 0
+        for key, count in doc_counts:
+            self.counts.inc(key, count)
+            # TODO: Why doesn't inc return this? =/
+            corpus_count = self.counts[key]
+            # Remember the string when we exceed min count
+            if corpus_count >= self.min_freq and (corpus_count - count) < self.min_freq:
+                self.strings[key] = doc_strings[key]
+            n += count
+        return n
+
     def __iter__(self):
-        for root, dirnames, filenames in os.walk(self.basedir):
+        for root, dirnames, filenames in os.walk(self.directory):
             for filename in sorted(fnmatch.filter(filenames, '*.tar')):
-                fullfn = os.path.join(root, filename)
+                fullfn = path.join(root, filename)
                 print(fullfn)
 
                 if self.method == NATIVE_METHOD:
@@ -76,14 +105,41 @@ class MultipleFileSentences(object):
                                         yield self.tokenizer.tokenize(data['text'])
 
 
-if __name__ == '__main__':
+def main():
     if len(sys.argv) < 3:
         print("Usage: train_word2vec.py <inputfile> <modelname>")
         sys.exit(0)
 
-    inputfile = sys.argv[1]
-    modelname = sys.argv[2]
-    sentences = MultipleFileSentences(inputfile)
-    model = Word2Vec(sentences, size=200, window=10, min_count=10,
-                     workers=8, iter=2, sorted_vocab=1)
-    model.save(modelname)
+    in_dir = sys.argv[1]
+    out_loc = sys.argv[2]
+    nr_iter = 2
+
+    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    model = Word2Vec(
+        size=200,
+        window=10,
+        min_count=10,
+        workers=12
+    )
+    sentences = MultipleFileSentences(in_dir)
+    sentence_no = -1
+    total_words = 0
+    for sentence_no, sentence in enumerate(sentences):
+        total_words += sentences.count_doc(sentence)
+        if sentence_no % PROGRESS_PER == 0:
+            logger.info("PROGRESS: at batch #%i, processed %i words, keeping %i word types",
+                        sentence_no, total_words, len(sentences.strings))
+    model.corpus_count = sentence_no + 1
+    model.raw_vocab = defaultdict(int)
+    for key, string in sentences.strings.items():
+        model.raw_vocab[string] = sentences.counts[key]
+    model.scale_vocab()
+    model.finalize_vocab()
+    model.iter = nr_iter
+    model.train(sentences)
+
+    model.save(out_loc)
+
+
+if __name__ == '__main__':
+    main()
