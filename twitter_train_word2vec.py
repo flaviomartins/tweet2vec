@@ -31,7 +31,7 @@ else:
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
-BUFSIZE = 32 * 1024**2
+BUFSIZE = 64 * 1024**2
 
 
 class MultipleFileSentences(object):
