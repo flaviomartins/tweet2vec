@@ -3,6 +3,7 @@
 
 from __future__ import print_function, unicode_literals, division
 import io
+import multiprocessing
 import tarfile
 import bz2
 from subprocess import PIPE, Popen
@@ -115,7 +116,7 @@ class MultipleFileSentences(object):
     negative=("Number of negative samples", "option", "g", int),
     nr_iter=("Number of iterations", "option", "i", int),
 )
-def main(in_dir, out_loc, negative=5, n_workers=4, window=5, size=200, min_count=10, nr_iter=2):
+def main(in_dir, out_loc, negative=5, n_workers=multiprocessing.cpu_count(), window=5, size=200, min_count=10, nr_iter=2):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     model = Word2Vec(
         size=size,
