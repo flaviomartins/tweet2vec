@@ -73,7 +73,7 @@ class MultipleFileSentences(object):
                         for tarinfo in tar:
                             if tarinfo.isfile() and os.path.splitext(tarinfo.name)[1] == ".bz2":
                                 f = tar.extractfile(tarinfo.name)
-                                content = StringIO(bz2.decompress(f.read()))
+                                content = io.BytesIO(bz2.decompress(f.read()))
                                 for line in content:
                                     data = self.my_json_loads(line)
                                     if 'text' in data:
