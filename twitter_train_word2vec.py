@@ -60,14 +60,10 @@ class MultipleFileSentences(object):
                     p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
                     p2 = Popen([self.command, '-dc'], bufsize=BUFSIZE, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
-                    while True:
-                        line = p2.stdout.readline()
-                        if line != '':
-                            data = self.my_json_loads(line)
-                            if 'text' in data:
-                                yield self.tokenizer.tokenize(data['text'])
-                        else:
-                            break
+                    for line in p2.stdout:
+                        data = self.my_json_loads(line)
+                        if 'text' in data:
+                            yield self.tokenizer.tokenize(data['text'])
                 else:
                     with tarfile.open(fullfn, 'r') as tar:
                         for tarinfo in tar:
