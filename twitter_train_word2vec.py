@@ -58,7 +58,7 @@ class MultipleFileSentences(object):
         for root, dirnames, filenames in os.walk(self.directory):
             for filename in sorted(fnmatch.filter(filenames, '*.tar')):
                 fullfn = path.join(root, filename)
-                print(fullfn)
+                logger.info("PROGRESS: processing file %s", fullfn)
 
                 if self.method == NATIVE_METHOD:
                     p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
