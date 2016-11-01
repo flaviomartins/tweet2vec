@@ -9,7 +9,11 @@ import bz2
 from subprocess import PIPE, Popen
 import logging
 from os import path
-import os
+# fails to import scandir < 3.5
+try:
+    from os import scandir, walk
+except ImportError:
+    from scandir import scandir, walk
 import fnmatch
 
 import plac
@@ -55,7 +59,7 @@ class MultipleFileSentences(object):
         return data
 
     def __iter__(self):
-        for root, dirnames, filenames in os.walk(self.directory):
+        for root, dirnames, filenames in walk(self.directory):
             for filename in sorted(fnmatch.filter(filenames, '*.tar')):
                 fullfn = path.join(root, filename)
                 logger.info("PROGRESS: processing file %s", fullfn)
@@ -71,7 +75,7 @@ class MultipleFileSentences(object):
                 else:
                     with tarfile.open(fullfn, 'r') as tar:
                         for tarinfo in tar:
-                            if tarinfo.isfile() and os.path.splitext(tarinfo.name)[1] == ".bz2":
+                            if tarinfo.isfile() and path.splitext(tarinfo.name)[1] == ".bz2":
                                 f = tar.extractfile(tarinfo.name)
                                 content = io.BytesIO(bz2.decompress(f.read()))
                                 for line in content:
