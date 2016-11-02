@@ -92,6 +92,7 @@ class MultipleFileSentences(object):
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
+    skipgram=("By default (sg=0), CBOW is used. Otherwise (sg=1), skip-gram is employed.", "option", "sg", int),
     n_workers=("Number of workers", "option", "n", int),
     size=("Dimension of the word vectors", "option", "d", int),
     window=("Context window size", "option", "w", int),
@@ -99,10 +100,11 @@ class MultipleFileSentences(object):
     negative=("Number of negative samples", "option", "g", int),
     nr_iter=("Number of iterations", "option", "i", int),
 )
-def main(in_dir, out_loc, negative=5, n_workers=cpu_count(), window=5, size=200, min_count=10, nr_iter=2):
+def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count(), window=10, size=200, min_count=10, nr_iter=2):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     model = Word2Vec(
         size=size,
+        sg=skipgram,
         window=window,
         min_count=min_count,
         workers=n_workers,
