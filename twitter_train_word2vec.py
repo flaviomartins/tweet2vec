@@ -9,6 +9,7 @@ import tarfile
 import bz2
 from subprocess import PIPE, Popen
 import logging
+from toolz import partition_all
 from os import path
 # fails to import scandir < 3.5
 try:
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
 BUFSIZE = 64 * 1024**2
-CHUNKSIZE = 10000
+JOBSIZE = 10000
 PROGRESS_PER = 10000
 TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
 
@@ -64,16 +65,9 @@ class MultipleFileSentences(object):
                     p2 = Popen([self.command, '-dc'], bufsize=BUFSIZE, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
                     with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-                        chunk = []
-                        for line in p2.stdout:
-                            chunk.append(line)
-                            if len(chunk) == CHUNKSIZE:
-                                for result in executor.map(process_line, chunk):
-                                    if result is not None:
-                                        yield result
-                                chunk = []
-                        if len(chunk) > 0:
-                            for result in executor.map(process_line, chunk):
+                        jobs = partition_all(JOBSIZE, p2.stdout)
+                        for job in jobs:
+                            for result in executor.map(process_line, job):
                                 if result is not None:
                                     yield result
                 else:
