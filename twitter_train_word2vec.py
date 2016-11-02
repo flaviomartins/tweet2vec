@@ -4,6 +4,7 @@
 from __future__ import print_function, unicode_literals, division
 import io
 from multiprocessing import cpu_count
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import tarfile
 import bz2
 from subprocess import PIPE, Popen
@@ -31,13 +32,14 @@ logger = logging.getLogger(__name__)
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
 BUFSIZE = 64 * 1024**2
+CHUNKSIZE = 10000
 PROGRESS_PER = 10000
+TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
 
 
 class MultipleFileSentences(object):
     def __init__(self, directory):
         self.directory = directory
-        self.tokenizer = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
         self.method = NATIVE_METHOD
         self.command = 'pbzip2'
         try:
@@ -51,18 +53,6 @@ class MultipleFileSentences(object):
                 self.command = 'python tarfile/bz2'
         print('method: ' + self.method + '\nusing: ' + self.command)
 
-    @staticmethod
-    def my_json_loads(content):
-        try:
-            data = ujson.loads(content)
-        except ValueError:
-            try:
-                data = json.loads(content)
-            except ValueError as ve:
-                data = ''
-                logger.warn('DECODE FAIL: %s %s', ve.message)
-        return data
-
     def __iter__(self):
         for root, dirnames, filenames in walk(self.directory):
             for filename in sorted(fnmatch.filter(filenames, '*.tar')):
@@ -73,20 +63,45 @@ class MultipleFileSentences(object):
                     p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
                     p2 = Popen([self.command, '-dc'], bufsize=BUFSIZE, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
-                    for line in p2.stdout:
-                        data = self.my_json_loads(line)
-                        if 'text' in data:
-                            yield self.tokenizer.tokenize(data['text'])
+                    with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
+                        chunk = []
+                        for line in p2.stdout:
+                            chunk.append(line)
+                            if len(chunk) == CHUNKSIZE:
+                                for result in executor.map(process_line, chunk):
+                                    if result is not None:
+                                        yield result
+                                chunk = []
+                        if len(chunk) > 0:
+                            for result in executor.map(process_line, chunk):
+                                if result is not None:
+                                    yield result
                 else:
                     with tarfile.open(fullfn, 'r') as tar:
                         for tarinfo in tar:
                             if tarinfo.isfile() and path.splitext(tarinfo.name)[1] == ".bz2":
                                 f = tar.extractfile(tarinfo.name)
                                 content = io.BytesIO(bz2.decompress(f.read()))
-                                for line in content:
-                                    data = self.my_json_loads(line)
-                                    if 'text' in data:
-                                        yield self.tokenizer.tokenize(data['text'])
+                                chunk = content.readlines()
+                                with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
+                                    for result in executor.map(process_line, chunk):
+                                        if result is not None:
+                                            yield result
+
+
+def process_line(line):
+    try:
+        data = ujson.loads(line)
+    except ValueError:
+        try:
+            data = json.loads(line)
+        except ValueError as ve:
+            data = ''
+            logger.warn('DECODE FAIL: %s %s', ve.message)
+    if 'text' in data:
+        return TOKENIZER.tokenize(data['text'])
+    else:
+        return None
 
 
 @plac.annotations(
