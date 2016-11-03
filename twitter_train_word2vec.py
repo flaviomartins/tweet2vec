@@ -32,15 +32,13 @@ logger = logging.getLogger(__name__)
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
-BUFSIZE = 64 * 1024**2
-JOBSIZE = 10000
-PROGRESS_PER = 10000
 TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
 
 
 class MultipleFileSentences(object):
-    def __init__(self, directory):
+    def __init__(self, directory, job_size=100000):
         self.directory = directory
+        self.job_size = job_size
         self.method = NATIVE_METHOD
         self.command = 'pbzip2'
         try:
@@ -61,11 +59,11 @@ class MultipleFileSentences(object):
                 logger.info("PROGRESS: processing file %s", fullfn)
 
                 if self.method == NATIVE_METHOD:
-                    p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=BUFSIZE, stdout=PIPE)
-                    p2 = Popen([self.command, '-dc'], bufsize=BUFSIZE, stdin=p1.stdout, stdout=PIPE)
+                    p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=-1, stdout=PIPE)
+                    p2 = Popen([self.command, '-dc'], bufsize=-1, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
                     with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-                        jobs = partition_all(JOBSIZE, p2.stdout)
+                        jobs = partition_all(self.job_size, p2.stdout)
                         for job in jobs:
                             for result in executor.map(process_line, job):
                                 if result is not None:
@@ -108,8 +106,9 @@ def process_line(line):
     min_count=("Min count", "option", "m", int),
     negative=("Number of negative samples", "option", "g", int),
     nr_iter=("Number of iterations", "option", "i", int),
+    job_size=("Job size in number of lines", "option", "j", int),
 )
-def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count(), window=10, size=200, min_count=10, nr_iter=2):
+def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count(), window=10, size=200, min_count=10, nr_iter=2, job_size=100000):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     model = Word2Vec(
         size=size,
@@ -121,8 +120,8 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count(), window=
         negative=negative,
         iter=nr_iter
     )
-    sentences = MultipleFileSentences(in_dir)
-    model.build_vocab(sentences, progress_per=PROGRESS_PER)
+    sentences = MultipleFileSentences(in_dir, job_size)
+    model.build_vocab(sentences, progress_per=10000)
     model.train(sentences)
 
     model.save(out_loc)
