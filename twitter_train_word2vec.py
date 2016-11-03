@@ -4,7 +4,7 @@
 from __future__ import print_function, unicode_literals, division
 import io
 from multiprocessing import cpu_count
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import tarfile
 import bz2
 from subprocess import PIPE, Popen
@@ -36,8 +36,9 @@ TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=T
 
 
 class MultipleFileSentences(object):
-    def __init__(self, directory, job_size=100000):
+    def __init__(self, directory, n_workers=cpu_count(), job_size=100000):
         self.directory = directory
+        self.n_workers = n_workers
         self.job_size = job_size
         self.method = NATIVE_METHOD
         self.command = 'pbzip2'
@@ -62,10 +63,22 @@ class MultipleFileSentences(object):
                     p1 = Popen(['tar', 'xfO', fullfn, '--wildcards', '--no-anchored', '*.bz2'], bufsize=-1, stdout=PIPE)
                     p2 = Popen([self.command, '-dc'], bufsize=-1, stdin=p1.stdout, stdout=PIPE)
                     p1.stdout.close()
-                    with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-                        jobs = partition_all(self.job_size, p2.stdout)
-                        for job in jobs:
-                            for result in executor.map(process_line, job):
+
+                    jobs = partition_all(self.job_size, p2.stdout)
+                    with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
+                        futures = []
+                        for j, job in enumerate(jobs):
+                            futures.append(executor.submit(process_job, job))
+                            if j % self.n_workers == 0:
+                                for f in as_completed(futures):
+                                    results = f.result()
+                                    for result in results:
+                                        if result is not None:
+                                            yield result
+                                futures = []
+                        for f in as_completed(futures):
+                            results = f.result()
+                            for result in results:
                                 if result is not None:
                                     yield result
                 else:
@@ -74,11 +87,22 @@ class MultipleFileSentences(object):
                             if tarinfo.isfile() and path.splitext(tarinfo.name)[1] == ".bz2":
                                 f = tar.extractfile(tarinfo.name)
                                 content = io.BytesIO(bz2.decompress(f.read()))
-                                chunk = content.readlines()
-                                with ProcessPoolExecutor(max_workers=cpu_count()) as executor:
-                                    for result in executor.map(process_line, chunk):
+                                job = content.readlines()
+                                with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
+                                    future = executor.submit(process_job, job)
+                                    results = future.result()
+                                    for result in results:
                                         if result is not None:
                                             yield result
+
+
+def process_job(job):
+    results = []
+    for line in job:
+        result = process_line(line)
+        if result is not None:
+            results.append(result)
+    return results
 
 
 def process_line(line):
@@ -120,7 +144,7 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count(), window=
         negative=negative,
         iter=nr_iter
     )
-    sentences = MultipleFileSentences(in_dir, job_size)
+    sentences = MultipleFileSentences(in_dir, n_workers, job_size)
     model.build_vocab(sentences, progress_per=10000)
     model.train(sentences)
 
