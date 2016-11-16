@@ -48,7 +48,7 @@ class TagAutocompleteResource:
     def suggestions(self, topic, q, limit):
         tokens = self.tokens(q)
         word = tokens[-1]
-        context = tokens
+        context = tokens[:-1]
         context = filter(lambda x: x not in STOPWORDS, context)
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
         most_similar = self.most_similar(topic, context, MAX_RESULTS_POOL)
