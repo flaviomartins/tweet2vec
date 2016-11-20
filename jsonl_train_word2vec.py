@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import codecs
+import io
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import gzip
@@ -59,7 +59,7 @@ class MultipleFileSentences(object):
 
 def iter_jsons(directory):
     for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, '*.jsonl.gz'):
+        for filename in fnmatch.filter(filenames, '*.jsonl*'):
             yield path.join(root, filename)
 
 
@@ -73,8 +73,13 @@ def process_job(job):
 
 
 def process_file(filepath):
+    if filepath.endswith('.gz'):
+        f = gzip.open(filepath)
+    else:
+        f = io.open(filepath, 'r', encoding='utf8')
+
     result = []
-    for line in gzip.open(filepath):
+    for line in f:
         try:
             data = ujson.loads(line)
         except ValueError:
@@ -85,6 +90,7 @@ def process_file(filepath):
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
         if 'text' in data:
             result.append(TOKENIZER.tokenize(data['text']))
+    f.close()
     return result
 
 
