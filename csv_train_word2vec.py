@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import io
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import gzip
@@ -18,7 +17,6 @@ import fnmatch
 
 import plac
 import csv
-import json
 from gensim.models import Word2Vec
 from nltk.tokenize import TweetTokenizer
 
@@ -71,15 +69,20 @@ def process_job(job):
 
 def process_file(filepath):
     if filepath.endswith('.gz'):
-        csvfile = gzip.open(filepath)
+        csvfile = gzip.open(filepath, 'rb')
     else:
-        csvfile = open(filepath)
+        csvfile = open(filepath, 'rb')
 
     reader = csv.DictReader(csvfile)
     result = []
-    for row in reader:
-        if 'Text' in row:
-            result.append(TOKENIZER.tokenize(row['Text']))
+    # TODO: Cristiano csv has a null byte?
+    try:
+        for row in reader:
+            if 'Text' in row:
+                result.append(TOKENIZER.tokenize(row['Text']))
+    except csv.Error as ce:
+        logger.warn('DECODE FAIL: %s %s', filepath, ce.message)
+        pass
     csvfile.close()
     return result
 
