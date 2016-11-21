@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import io
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import gzip
@@ -76,7 +75,7 @@ def process_file(filepath):
     if filepath.endswith('.gz'):
         f = gzip.open(filepath)
     else:
-        f = io.open(filepath, 'r', encoding='utf8')
+        f = open(filepath)
 
     result = []
     for line in f:
