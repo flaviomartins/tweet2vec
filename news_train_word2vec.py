@@ -24,6 +24,7 @@ except ImportError:
 import json
 import yaml
 from gensim.models import Word2Vec
+from gensim.utils import ClippedCorpus
 from nltk.tokenize import TweetTokenizer
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=T
 
 
 class MultipleFileSentences(object):
-    def __init__(self, directory, prefixes, n_workers=cpu_count(), job_size=1):
+    def __init__(self, directory, prefixes, n_workers=cpu_count()-1, job_size=1):
         self.directory = directory
         self.prefixes = prefixes
         self.n_workers = n_workers
@@ -103,11 +104,13 @@ def process_file(filepath):
     negative=("Number of negative samples", "option", "g", int),
     nr_iter=("Number of iterations", "option", "i", int),
     job_size=("Job size in number of lines", "option", "j", int),
+    max_docs=("Limit maximum number of documents", "option", "L", int)
 )
-def main(in_dir, out_dir, config_file, skipgram=0, negative=5, n_workers=cpu_count(), window=10, size=200, min_count=10, nr_iter=2, job_size=1):
+def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-1, window=10, size=200, min_count=10,
+         nr_iter=2, job_size=1, max_docs=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-    with open(config_file, 'r') as cf:
+    with open(config, 'r') as cf:
         config = yaml.load(cf)
 
     for topic, sources in config['selection']['topics'].iteritems():
@@ -122,7 +125,7 @@ def main(in_dir, out_dir, config_file, skipgram=0, negative=5, n_workers=cpu_cou
             negative=negative,
             iter=nr_iter
         )
-        sentences = MultipleFileSentences(in_dir, sources, n_workers, job_size)
+        sentences = ClippedCorpus(MultipleFileSentences(in_dir, sources, n_workers, job_size), max_docs=max_docs)
         model.build_vocab(sentences, progress_per=10000)
         model.train(sentences)
 
