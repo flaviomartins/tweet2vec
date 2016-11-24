@@ -149,13 +149,13 @@ def process_texts(texts, lemmatize=False):
     texts = [[word for word in line if word not in stops] for line in texts]
     if lemmatize:
         texts = [[
-                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
-                                                                    allowed_tags=re.compile('(NN)'),
-                                                                    min_length=3)
+                     re.split('/', word)[0] for word in utils.lemmatize(' '.join(line),
+                                                                        allowed_tags=re.compile('(NN)'),
+                                                                        min_length=3)
                      ] for line in texts
                  ]
     else:
-        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[word.replace("'s", "") for word in line] for line in texts]
         texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     return texts
 

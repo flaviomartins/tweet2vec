@@ -163,18 +163,14 @@ def process_texts(texts, lemmatize=True):
     texts = [[word for word in line if not Filtered.match(word)] for line in texts]
     texts = [[word for word in line if word not in stops] for line in texts]
     if lemmatize:
-        texts = [[word.encode('unicode-escape') for word in line] for line in texts]  # to make lemmatizer happy
-        try:
-            texts = [[
-                         word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+        texts = [[
+                     re.split('/', word)[0] for word in utils.lemmatize(' '.join(line),
                                                                         allowed_tags=re.compile('(NN)'),
                                                                         min_length=3)
-                         ] for line in texts
-                     ]
-        except Exception as ex:
-            logger.error(ex.message)
+                     ] for line in texts
+                 ]
     else:
-        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[word.replace("'s", "") for word in line] for line in texts]
         texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     return texts
 
