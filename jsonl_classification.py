@@ -97,12 +97,12 @@ def process_file(filepath):
 
     result = []
     for line in f:
-        if isinstance(line, six.binary_type):
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError as ude:
-                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
-                continue
+        # if isinstance(line, six.binary_type):
+        #     try:
+        #         line = line.decode('utf-8')
+        #     except UnicodeDecodeError as ude:
+        #         logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+        #         continue
         try:
             data = ujson.loads(line)
         except ValueError:
@@ -163,12 +163,15 @@ def process_texts(texts, lemmatize=True):
     texts = [[word for word in line if not Filtered.match(word)] for line in texts]
     texts = [[word for word in line if word not in stops] for line in texts]
     if lemmatize:
-        texts = [[
-                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
-                                                                    allowed_tags=re.compile('(NN)'),
-                                                                    min_length=3)
-                     ] for line in texts
-                 ]
+        try:
+            texts = [[
+                         word.split('/')[0] for word in utils.lemmatize(' '.join(line.encode('unicode-escape')),
+                                                                        allowed_tags=re.compile('(NN)'),
+                                                                        min_length=3)
+                         ] for line in texts
+                     ]
+        except Exception as ex:
+            logger.error(ex.message)
     else:
         texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
         texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
