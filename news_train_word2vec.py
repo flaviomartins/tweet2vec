@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import codecs
-from multiprocessing import cpu_count
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+
 import gzip
+import io
 import logging
-from toolz import partition_all
+from multiprocessing import cpu_count
 from os import path
+
+import six
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from toolz import partition_all
+
 # fails to import scandir < 3.5
 try:
     from os import scandir, walk
@@ -23,14 +27,15 @@ except ImportError:
     import json as ujson
 import json
 import yaml
-from gensim.models import Word2Vec
-from gensim.utils import ClippedCorpus
-from nltk.tokenize import TweetTokenizer
+import re
+from gensim.models import Phrases, Word2Vec
+from gensim.models.phrases import Phraser
+from gensim import utils
+from nltk.corpus import stopwords
+from twokenize import twokenize
 
 logger = logging.getLogger(__name__)
-
-
-TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
+stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
 class MultipleFileSentences(object):
@@ -47,22 +52,32 @@ class MultipleFileSentences(object):
             for j, job in enumerate(jobs):
                 futures.append(executor.submit(process_job, job))
                 if j % self.n_workers == 0:
-                    for f in as_completed(futures):
-                        results = f.result()
-                        for result in results:
-                            if result is not None:
-                                yield result
+                    for future in as_completed(futures):
+                        try:
+                            results = future.result()
+                        except Exception as exc:
+                            logger.error('generated an exception: %s', exc)
+                        else:
+                            logger.debug('job has %d sentences', len(results))
+                            for result in results:
+                                if result is not None:
+                                    yield result
                     futures = []
-            for f in as_completed(futures):
-                results = f.result()
-                for result in results:
-                    if result is not None:
-                        yield result
+            for future in as_completed(futures):
+                try:
+                    results = future.result()
+                except Exception as exc:
+                    logger.error('generated an exception: %s', exc)
+                else:
+                    logger.debug('job has %d sentences', len(results))
+                    for result in results:
+                        if result is not None:
+                            yield result
 
 
 def iter_jsons(directory, prefixes):
     for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, '*.jsonl.gz'):
+        for filename in fnmatch.filter(filenames, '*.jsonl*'):
             if filename.split('.')[0] in prefixes:
                 yield path.join(root, filename)
 
@@ -72,13 +87,24 @@ def process_job(job):
     for filepath in job:
         result = process_file(filepath)
         if result is not None:
-            results = results + result
+            results += result
     return results
 
 
 def process_file(filepath):
+    if filepath.endswith('.gz'):
+        f = gzip.open(filepath)
+    else:
+        f = io.open(filepath, 'rt', encoding='utf-8')
+
     result = []
-    for line in gzip.open(filepath):
+    for line in f:
+        if isinstance(line, six.binary_type):
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError as ude:
+                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+                continue
         try:
             data = ujson.loads(line)
         except ValueError:
@@ -88,14 +114,73 @@ def process_file(filepath):
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
                 continue
         if 'text' in data:
-            result.append(TOKENIZER.tokenize(data['text']))
-    return result
+            result.append(twokenize.tokenizeRawTweetText(data['text']))
+    f.close()
+    return process_texts(result)
+
+
+# Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
+Filtered  = re.compile(
+    unicode(twokenize.regex_or(
+        twokenize.Hearts,
+        twokenize.url,
+        twokenize.Email,
+        twokenize.timeLike,
+        twokenize.numberWithCommas,
+        twokenize.numComb,
+        twokenize.emoticon,
+        twokenize.Arrows,
+        twokenize.entity,
+        twokenize.punctSeq,
+        twokenize.arbitraryAbbrev,
+        twokenize.separators,
+        twokenize.decorations,
+        # twokenize.embeddedApostrophe,
+        # twokenize.Hashtag,
+        twokenize.AtMention,
+        "(?:RT|rt)".encode('utf-8')
+    ).decode('utf-8')), re.UNICODE)
+
+
+def process_texts(texts, lemmatize=False):
+    """
+    Function to process texts. Following are the steps we take:
+
+    1. Filter mentions, etc.
+    1. Lowercasing.
+    2. Stopword Removal.
+    3. Lemmatization (not stem since stemming can reduce the interpretability).
+    OR
+    3. Possessive Filtering.
+
+    Parameters:
+    ----------
+    texts: Tokenized texts.
+
+    Returns:
+    -------
+    texts: Pre-processed tokenized texts.
+    """
+
+    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
+    texts = [[word for word in line if word not in stops] for line in texts]
+    if lemmatize:
+        texts = [[
+                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+                                                                    allowed_tags=re.compile('(NN)'),
+                                                                    min_length=3)
+                     ] for line in texts
+                 ]
+    else:
+        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
+    return texts
 
 
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_dir=("Location of output directory"),
-    config_file=("YAML config file"),
+    config=("YAML config file"),
     skipgram=("By default (sg=0), CBOW is used. Otherwise (sg=1), skip-gram is employed.", "option", "sg", int),
     n_workers=("Number of workers", "option", "n", int),
     size=("Dimension of the word vectors", "option", "d", int),
@@ -113,7 +198,7 @@ def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-
     with open(config, 'r') as cf:
         config = yaml.load(cf)
 
-    for topic, sources in config['selection']['topics'].iteritems():
+    for topic, sources in config['selection']['topics'].items():
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         model = Word2Vec(
             size=size,
@@ -125,9 +210,20 @@ def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-
             negative=negative,
             iter=nr_iter
         )
-        sentences = ClippedCorpus(MultipleFileSentences(in_dir, sources, n_workers, job_size), max_docs=max_docs)
-        model.build_vocab(sentences, progress_per=10000)
-        model.train(sentences)
+        sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, sources, n_workers, job_size), max_docs=max_docs)
+
+        logger.info('Bigram phrases')
+        bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
+        logger.info('Bigram phraser')
+        bigram_phraser = Phraser(bigram_transformer)
+
+        logger.info('Trigram phrases')
+        trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
+        logger.info('Trigram phraser')
+        trigram_phraser = Phraser(trigram_transformer)
+
+        model.build_vocab(trigram_phraser[bigram_phraser[sentences]], progress_per=10000)
+        model.train(trigram_phraser[bigram_phraser[sentences]])
 
         model.save(path.join(out_dir, topic + '.model'))
 

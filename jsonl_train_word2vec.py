@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import io
-from multiprocessing import cpu_count
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+
 import gzip
+import io
 import logging
-from toolz import partition_all
+from multiprocessing import cpu_count
 from os import path
+
+import six
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from toolz import partition_all
+
 # fails to import scandir < 3.5
 try:
     from os import scandir, walk
@@ -25,7 +29,7 @@ import json
 import re
 from gensim.models import Phrases, Word2Vec
 from gensim.models.phrases import Phraser
-from gensim.utils import ClippedCorpus, lemmatize
+from gensim import utils
 from nltk.corpus import stopwords
 from twokenize import twokenize
 
@@ -88,10 +92,16 @@ def process_file(filepath):
     if filepath.endswith('.gz'):
         f = gzip.open(filepath)
     else:
-        f = io.open(filepath, 'r', encoding='utf-8')
+        f = io.open(filepath, 'rt', encoding='utf-8')
 
     result = []
     for line in f:
+        if isinstance(line, six.binary_type):
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError as ude:
+                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+                continue
         try:
             data = ujson.loads(line)
         except ValueError:
@@ -129,13 +139,15 @@ Filtered  = re.compile(
     ).decode('utf-8')), re.UNICODE)
 
 
-def process_texts(texts):
+def process_texts(texts, lemmatize=False):
     """
     Function to process texts. Following are the steps we take:
 
     1. Filter mentions, etc.
     1. Lowercasing.
     2. Stopword Removal.
+    3. Lemmatization (not stem since stemming can reduce the interpretability).
+    OR
     3. Possessive Filtering.
 
     Parameters:
@@ -148,9 +160,17 @@ def process_texts(texts):
     """
 
     texts = [[word for word in line if not Filtered.match(word)] for line in texts]
-    texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     texts = [[word for word in line if word not in stops] for line in texts]
-    texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+    if lemmatize:
+        texts = [[
+                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+                                                                    allowed_tags=re.compile('(NN)'),
+                                                                    min_length=3)
+                     ] for line in texts
+                 ]
+    else:
+        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     return texts
 
 
@@ -180,7 +200,7 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
         negative=negative,
         iter=nr_iter
     )
-    sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
     bigram_transformer = Phrases(sentences, min_count=5, threshold=100)

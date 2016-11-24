@@ -1,27 +1,25 @@
 from __future__ import print_function, unicode_literals, division
-import json
-import yaml
 import logging
 from os import path
-from wsgiref import simple_server
 
+from wsgiref import simple_server
 import falcon
 
 import plac
+import json
+import yaml
+import re
 from gensim.models import Word2Vec
-from nltk.tokenize import TweetTokenizer
+from gensim import utils
 from nltk.corpus import stopwords
+from twokenize import twokenize
 
 
 logger = logging.getLogger(__name__)
+stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
-TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
-STOPWORDS = set(stopwords.words('english'))\
-    .union(stopwords.words('portuguese'))\
-    .union(set(['#', '.', '..', '...', ',', '?', '!']))
 MAX_RESULTS_POOL = 1000
-
 ALLOWED_ORIGINS = ['*']
 
 
@@ -39,7 +37,7 @@ class TagAutocompleteResource:
         self.models = models
 
     def tokens(self, q):
-        return TOKENIZER.tokenize(q)
+        return process_texts([twokenize.tokenizeRawTweetText(q)])[0]
 
     def most_similar(self, topic, tokens, limit):
         model = self.models[topic]
@@ -49,7 +47,6 @@ class TagAutocompleteResource:
         tokens = self.tokens(q)
         word = tokens[-1]
         context = tokens[:-1]
-        context = filter(lambda x: x not in STOPWORDS, context)
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
         most_similar = self.most_similar(topic, context, MAX_RESULTS_POOL)
         return most_similar[:limit]
@@ -80,6 +77,64 @@ class TagAutocompleteResource:
         resp.status = falcon.HTTP_200
 
 
+# Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
+Filtered  = re.compile(
+    unicode(twokenize.regex_or(
+        twokenize.Hearts,
+        twokenize.url,
+        twokenize.Email,
+        twokenize.timeLike,
+        twokenize.numberWithCommas,
+        twokenize.numComb,
+        twokenize.emoticon,
+        twokenize.Arrows,
+        twokenize.entity,
+        twokenize.punctSeq,
+        twokenize.arbitraryAbbrev,
+        twokenize.separators,
+        twokenize.decorations,
+        # twokenize.embeddedApostrophe,
+        # twokenize.Hashtag,
+        twokenize.AtMention,
+        "(?:RT|rt)".encode('utf-8')
+    ).decode('utf-8')), re.UNICODE)
+
+
+def process_texts(texts, lemmatize=False):
+    """
+    Function to process texts. Following are the steps we take:
+
+    1. Filter mentions, etc.
+    1. Lowercasing.
+    2. Stopword Removal.
+    3. Lemmatization (not stem since stemming can reduce the interpretability).
+    OR
+    3. Possessive Filtering.
+
+    Parameters:
+    ----------
+    texts: Tokenized texts.
+
+    Returns:
+    -------
+    texts: Pre-processed tokenized texts.
+    """
+
+    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
+    texts = [[word for word in line if word not in stops] for line in texts]
+    if lemmatize:
+        texts = [[
+                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+                                                                    allowed_tags=re.compile('(NN)'),
+                                                                    min_length=3)
+                     ] for line in texts
+                 ]
+    else:
+        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
+    return texts
+
+
 # Useful for debugging problems in your API; works with pdb.set_trace(). You
 # can also use Gunicorn to host your app. Gunicorn can be configured to
 # auto-restart workers when it detects a code change, and it also works
@@ -99,14 +154,13 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
         config = yaml.load(cf)
 
     models = {}
-    for topic, sources in config['selection']['topics'].iteritems():
+    for topic, sources in config['selection']['topics'].items():
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         fullfn = path.join(in_dir, topic) + '.model'
         if path.exists(fullfn):
             models[topic] = Word2Vec.load(fullfn)
         else:
             logger.error('Missing model: %s', fullfn)
-
 
     # Configure your WSGI server to load "quotes.app" (app is a WSGI callable)
     app = falcon.API(middleware=[

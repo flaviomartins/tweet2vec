@@ -2,13 +2,17 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import io
-from multiprocessing import cpu_count
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+
 import gzip
+import io
 import logging
-from toolz import partition_all
+from multiprocessing import cpu_count
 from os import path
+
+import six
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from toolz import partition_all
+
 # fails to import scandir < 3.5
 try:
     from os import scandir, walk
@@ -23,7 +27,7 @@ except ImportError:
     import json as ujson
 import json
 import re
-from gensim.models import Phrases, LdaModel, LdaMulticore
+from gensim.models import Phrases, LdaMulticore
 from gensim.models.phrases import Phraser
 from gensim.corpora import Dictionary
 from gensim import utils
@@ -89,10 +93,16 @@ def process_file(filepath):
     if filepath.endswith('.gz'):
         f = gzip.open(filepath)
     else:
-        f = io.open(filepath, 'r', encoding='utf-8')
+        f = io.open(filepath, 'rt', encoding='utf-8')
 
     result = []
     for line in f:
+        if isinstance(line, six.binary_type):
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError as ude:
+                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+                continue
         try:
             data = ujson.loads(line)
         except ValueError:

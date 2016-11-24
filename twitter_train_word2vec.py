@@ -2,15 +2,19 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
-import io
-from multiprocessing import cpu_count
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
-import tarfile
+
 import bz2
-from subprocess import PIPE, Popen
+import io
 import logging
-from toolz import partition_all
+import tarfile
+from multiprocessing import cpu_count
 from os import path
+from subprocess import PIPE, Popen
+
+import six
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from toolz import partition_all
+
 # fails to import scandir < 3.5
 try:
     from os import scandir, walk
@@ -24,16 +28,18 @@ try:
 except ImportError:
     import json as ujson
 import json
-from gensim.models import Word2Vec
-from gensim.utils import ClippedCorpus
-from nltk.tokenize import TweetTokenizer
+import re
+from gensim.models import Phrases, Word2Vec
+from gensim.models.phrases import Phraser
+from gensim import utils
+from nltk.corpus import stopwords
+from twokenize import twokenize
 
 logger = logging.getLogger(__name__)
-
+stops = set(stopwords.words('english'))  # nltk stopwords list
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
-TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
 
 
 class MultipleFileSentences(object):
@@ -71,17 +77,27 @@ class MultipleFileSentences(object):
                         for j, job in enumerate(jobs):
                             futures.append(executor.submit(process_job, job))
                             if j % self.n_workers == 0:
-                                for f in as_completed(futures):
-                                    results = f.result()
-                                    for result in results:
-                                        if result is not None:
-                                            yield result
+                                for future in as_completed(futures):
+                                    try:
+                                        results = future.result()
+                                    except Exception as exc:
+                                        logger.error('generated an exception: %s', exc)
+                                    else:
+                                        logger.debug('job has %d sentences', len(results))
+                                        for result in results:
+                                            if result is not None:
+                                                yield result
                                 futures = []
-                        for f in as_completed(futures):
-                            results = f.result()
-                            for result in results:
-                                if result is not None:
-                                    yield result
+                        for future in as_completed(futures):
+                            try:
+                                results = future.result()
+                            except Exception as exc:
+                                logger.error('generated an exception: %s', exc)
+                            else:
+                                logger.debug('job has %d sentences', len(results))
+                                for result in results:
+                                    if result is not None:
+                                        yield result
                 else:
                     with tarfile.open(fullfn, 'r') as tar:
                         for tarinfo in tar:
@@ -103,10 +119,16 @@ def process_job(job):
         result = process_line(line)
         if result is not None:
             results.append(result)
-    return results
+    return process_texts(results)
 
 
 def process_line(line):
+    if isinstance(line, six.binary_type):
+        try:
+            line = line.decode('utf-8')
+        except UnicodeDecodeError as ude:
+            logger.warn('DECODE FAIL: %s', ude.message)
+            return None
     try:
         data = ujson.loads(line)
     except ValueError:
@@ -114,11 +136,69 @@ def process_line(line):
             data = json.loads(line)
         except ValueError as ve:
             data = ''
-            logger.warn('DECODE FAIL: %s %s', ve.message)
+            logger.warn('DECODE FAIL: %s', ve.message)
     if 'text' in data:
-        return TOKENIZER.tokenize(data['text'])
+        return twokenize.tokenizeRawTweetText(data['text'])
     else:
         return None
+
+
+# Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
+Filtered  = re.compile(
+    unicode(twokenize.regex_or(
+        twokenize.Hearts,
+        twokenize.url,
+        twokenize.Email,
+        twokenize.timeLike,
+        twokenize.numberWithCommas,
+        twokenize.numComb,
+        twokenize.emoticon,
+        twokenize.Arrows,
+        twokenize.entity,
+        twokenize.punctSeq,
+        twokenize.arbitraryAbbrev,
+        twokenize.separators,
+        twokenize.decorations,
+        # twokenize.embeddedApostrophe,
+        # twokenize.Hashtag,
+        twokenize.AtMention,
+        "(?:RT|rt)".encode('utf-8')
+    ).decode('utf-8')), re.UNICODE)
+
+
+def process_texts(texts, lemmatize=False):
+    """
+    Function to process texts. Following are the steps we take:
+
+    1. Filter mentions, etc.
+    1. Lowercasing.
+    2. Stopword Removal.
+    3. Lemmatization (not stem since stemming can reduce the interpretability).
+    OR
+    3. Possessive Filtering.
+
+    Parameters:
+    ----------
+    texts: Tokenized texts.
+
+    Returns:
+    -------
+    texts: Pre-processed tokenized texts.
+    """
+
+    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
+    texts = [[word for word in line if word not in stops] for line in texts]
+    if lemmatize:
+        texts = [[
+                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+                                                                    allowed_tags=re.compile('(NN)'),
+                                                                    min_length=3)
+                     ] for line in texts
+                 ]
+    else:
+        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
+    return texts
 
 
 @plac.annotations(
@@ -135,7 +215,7 @@ def process_line(line):
     max_docs=("Limit maximum number of documents", "option", "L", int)
 )
 def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, window=10, size=200, min_count=10, nr_iter=2,
-         job_size=100000, max_docs=None):
+         job_size=1000, max_docs=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     model = Word2Vec(
         size=size,
@@ -147,9 +227,20 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
         negative=negative,
         iter=nr_iter
     )
-    sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
-    model.build_vocab(sentences, progress_per=10000)
-    model.train(sentences)
+    sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+
+    logger.info('Bigram phrases')
+    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
+    logger.info('Bigram phraser')
+    bigram_phraser = Phraser(bigram_transformer)
+
+    logger.info('Trigram phrases')
+    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
+    logger.info('Trigram phraser')
+    trigram_phraser = Phraser(trigram_transformer)
+
+    model.build_vocab(trigram_phraser[bigram_phraser[sentences]], progress_per=10000)
+    model.train(trigram_phraser[bigram_phraser[sentences]])
 
     model.save(out_loc)
 
