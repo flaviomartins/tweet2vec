@@ -97,12 +97,12 @@ def process_file(filepath):
 
     result = []
     for line in f:
-        # if isinstance(line, six.binary_type):
-        #     try:
-        #         line = line.decode('utf-8')
-        #     except UnicodeDecodeError as ude:
-        #         logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
-        #         continue
+        if isinstance(line, six.binary_type):
+            try:
+                line = line.decode('utf-8')
+            except UnicodeDecodeError as ude:
+                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+                continue
         try:
             data = ujson.loads(line)
         except ValueError:
