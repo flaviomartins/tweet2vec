@@ -100,7 +100,7 @@ def process_file(filepath):
                 data = ''
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
         if 'text' in data:
-            result.append(TOKENIZER.tokenize(data['text']))
+            result.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
     return process_texts(result)
 
