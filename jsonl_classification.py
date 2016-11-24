@@ -157,20 +157,23 @@ def process_texts(texts):
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
-    skipgram=("By default (sg=0), CBOW is used. Otherwise (sg=1), skip-gram is employed.", "option", "sg", int),
     n_workers=("Number of workers", "option", "n", int),
-    size=("Dimension of the word vectors", "option", "d", int),
-    window=("Context window size", "option", "w", int),
-    min_count=("Min count", "option", "m", int),
-    negative=("Number of negative samples", "option", "g", int),
+    nr_topics=("Number of topics", "option", "t", int),
+    nr_passes=("Number of passes", "option", "p", int),
     nr_iter=("Number of iterations", "option", "i", int),
+    chunk_size=("Chunk size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int)
 )
-def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, window=10, size=200, min_count=10, nr_iter=2,
+def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=100, chunk_size=2000, nr_passes=20, nr_iter=400,
          job_size=1, max_docs=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-
+    # Set training parameters.
+    num_topics = nr_topics
+    chunksize = chunk_size
+    passes = nr_passes
+    iterations = nr_iter
+    eval_every = None  # Don't evaluate model perplexity, takes too much time.
     sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
@@ -191,22 +194,15 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
     corpus = [dictionary.doc2bow(text) for text in trigram_phraser[bigram_phraser[sentences]]]
 
     logger.info('id2word')
-    # Set training parameters.
-    num_topics = 10
-    chunksize = 2000
-    passes = 20
-    iterations = 400
-    eval_every = None  # Don't evaluate model perplexity, takes too much time.
-
     # Make a index to word dictionary.
     temp = dictionary[0]  # This is only to "load" the dictionary.
     id2word = dictionary.id2token
 
     logger.info('LDA')
-    model = LdaModel(corpus=corpus, id2word=id2word, chunksize=chunksize, random_state=1,  # workers=n_workers,
-                     alpha='auto', eta='auto',
-                     iterations=iterations, num_topics=num_topics,
-                     passes=passes, eval_every=eval_every)
+    model = LdaMulticore(corpus=corpus, id2word=id2word, chunksize=chunksize, random_state=1, workers=n_workers,
+                         # alpha='auto', eta='auto',
+                         iterations=iterations, num_topics=num_topics,
+                         passes=passes, eval_every=eval_every)
 
     top_topics = model.top_topics(corpus, num_words=20)
 
@@ -216,6 +212,8 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
 
     from pprint import pprint
     pprint(top_topics)
+
+    model.save(out_loc)
 
 
 if __name__ == '__main__':
