@@ -21,14 +21,15 @@ try:
 except ImportError:
     import json as ujson
 import json
-from gensim.models import Word2Vec
-from gensim.utils import ClippedCorpus
-from nltk.tokenize import TweetTokenizer
+import re
+from gensim.models import Phrases, Word2Vec
+from gensim.models.phrases import Phraser
+from gensim.utils import ClippedCorpus, lemmatize
+from nltk.corpus import stopwords
+from twokenize import twokenize
 
 logger = logging.getLogger(__name__)
-
-
-TOKENIZER = TweetTokenizer(preserve_case=False, reduce_len=True, strip_handles=True)
+stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
 class MultipleFileSentences(object):
@@ -44,17 +45,27 @@ class MultipleFileSentences(object):
             for j, job in enumerate(jobs):
                 futures.append(executor.submit(process_job, job))
                 if j % self.n_workers == 0:
-                    for f in as_completed(futures):
-                        results = f.result()
-                        for result in results:
-                            if result is not None:
-                                yield result
+                    for future in as_completed(futures):
+                        try:
+                            results = future.result()
+                        except Exception as exc:
+                            logger.error('generated an exception: %s', exc)
+                        else:
+                            logger.debug('job has %d sentences', len(results))
+                            for result in results:
+                                if result is not None:
+                                    yield result
                     futures = []
-            for f in as_completed(futures):
-                results = f.result()
-                for result in results:
-                    if result is not None:
-                        yield result
+            for future in as_completed(futures):
+                try:
+                    results = future.result()
+                except Exception as exc:
+                    logger.error('generated an exception: %s', exc)
+                else:
+                    logger.debug('job has %d sentences', len(results))
+                    for result in results:
+                        if result is not None:
+                            yield result
 
 
 def iter_jsons(directory):
@@ -68,7 +79,7 @@ def process_job(job):
     for filepath in job:
         result = process_file(filepath)
         if result is not None:
-            results = results + result
+            results += result
     return results
 
 
@@ -91,7 +102,55 @@ def process_file(filepath):
         if 'text' in data:
             result.append(TOKENIZER.tokenize(data['text']))
     f.close()
-    return result
+    return process_texts(result)
+
+
+# Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
+Filtered  = re.compile(
+    unicode(twokenize.regex_or(
+        twokenize.Hearts,
+        twokenize.url,
+        twokenize.Email,
+        twokenize.timeLike,
+        twokenize.numberWithCommas,
+        twokenize.numComb,
+        twokenize.emoticon,
+        twokenize.Arrows,
+        twokenize.entity,
+        twokenize.punctSeq,
+        twokenize.arbitraryAbbrev,
+        twokenize.separators,
+        twokenize.decorations,
+        # twokenize.embeddedApostrophe,
+        # twokenize.Hashtag,
+        twokenize.AtMention,
+        "(?:RT|rt)".encode('utf-8')
+    ).decode('utf-8')), re.UNICODE)
+
+
+def process_texts(texts):
+    """
+    Function to process texts. Following are the steps we take:
+
+    1. Filter mentions, etc.
+    1. Lowercasing.
+    2. Stopword Removal.
+    3. Possessive Filtering.
+
+    Parameters:
+    ----------
+    texts: Tokenized texts.
+
+    Returns:
+    -------
+    texts: Pre-processed tokenized texts.
+    """
+
+    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
+    texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
+    texts = [[word for word in line if word not in stops] for line in texts]
+    texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+    return texts
 
 
 @plac.annotations(
@@ -121,8 +180,19 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
         iter=nr_iter
     )
     sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
-    model.build_vocab(sentences, progress_per=10000)
-    model.train(sentences)
+
+    logger.info('Bigram phrases')
+    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
+    logger.info('Bigram phraser')
+    bigram_phraser = Phraser(bigram_transformer)
+
+    logger.info('Trigram phrases')
+    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
+    logger.info('Trigram phraser')
+    trigram_phraser = Phraser(trigram_transformer)
+
+    model.build_vocab(trigram_phraser[bigram_phraser[sentences]], progress_per=10000)
+    model.train(trigram_phraser[bigram_phraser[sentences]])
 
     model.save(out_loc)
 

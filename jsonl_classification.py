@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, unicode_literals, division, absolute_import
+from __future__ import print_function, unicode_literals, division
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import gzip
@@ -22,18 +22,14 @@ except ImportError:
     import json as ujson
 import json
 import re
-from gensim.models import Phrases, LdaMulticore
+from gensim.models import Phrases, LdaModel, LdaMulticore
 from gensim.models.phrases import Phraser
 from gensim.corpora import Dictionary
 from gensim.utils import ClippedCorpus, lemmatize
-from nltk.tokenize import TweetTokenizer
 from nltk.corpus import stopwords
 from twokenize import twokenize
 
 logger = logging.getLogger(__name__)
-
-
-TOKENIZER = twokenize
 stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
@@ -75,7 +71,7 @@ class MultipleFileSentences(object):
 
 def iter_jsons(directory):
     for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, 'R*.jsonl*'):
+        for filename in fnmatch.filter(filenames, '*.jsonl*'):
             yield path.join(root, filename)
 
 
@@ -178,26 +174,49 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
     sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
-    bigram_transformer = Phrases(sentences)
+    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
     logger.info('Bigram phraser')
     bigram_phraser = Phraser(bigram_transformer)
 
     logger.info('Trigram phrases')
-    trigram_transformer = Phrases(bigram_phraser[sentences])
+    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
     logger.info('Trigram phraser')
     trigram_phraser = Phraser(trigram_transformer)
 
-    print(trigram_phraser[bigram_phraser['the', 'best', 'way', 'music', 'video', 'new', 'york', 'city']])
-
     logger.info('Dictionary')
     dictionary = Dictionary(trigram_phraser[bigram_phraser[sentences]])
-    dictionary.filter_extremes(no_below=5, no_above=0.5, keep_n=100000)
+    dictionary.filter_extremes(no_below=20, no_above=0.5)
+
     logger.info('Corpus')
     corpus = [dictionary.doc2bow(text) for text in trigram_phraser[bigram_phraser[sentences]]]
 
+    logger.info('id2word')
+    # Set training parameters.
+    num_topics = 10
+    chunksize = 2000
+    passes = 20
+    iterations = 400
+    eval_every = None  # Don't evaluate model perplexity, takes too much time.
+
+    # Make a index to word dictionary.
+    temp = dictionary[0]  # This is only to "load" the dictionary.
+    id2word = dictionary.id2token
+
     logger.info('LDA')
-    ldamodel = LdaMulticore(corpus=corpus, num_topics=100, id2word=dictionary, workers=n_workers, random_state=1)
-    ldamodel.show_topics()
+    model = LdaModel(corpus=corpus, id2word=id2word, chunksize=chunksize, random_state=1,  # workers=n_workers,
+                     alpha='auto', eta='auto',
+                     iterations=iterations, num_topics=num_topics,
+                     passes=passes, eval_every=eval_every)
+
+    top_topics = model.top_topics(corpus, num_words=20)
+
+    # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
+    avg_topic_coherence = sum([t[1] for t in top_topics]) / num_topics
+    print('Average topic coherence: %.4f.' % avg_topic_coherence)
+
+    from pprint import pprint
+    pprint(top_topics)
+
 
 if __name__ == '__main__':
     plac.call(main)

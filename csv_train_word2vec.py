@@ -20,15 +20,11 @@ import unicodecsv as csv
 import re
 from gensim.models import Phrases, Word2Vec
 from gensim.models.phrases import Phraser
-from gensim.utils import ClippedCorpus
-from nltk.tokenize import TweetTokenizer
+from gensim.utils import ClippedCorpus, lemmatize
 from nltk.corpus import stopwords
 from twokenize import twokenize
 
 logger = logging.getLogger(__name__)
-
-
-TOKENIZER = twokenize
 stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
@@ -95,7 +91,7 @@ def process_file(filepath):
     result = []
     try:
         for row in reader:
-            result.append(TOKENIZER.tokenize(row[3]))
+            result.append(twokenize.tokenizeRawTweetText(row[3]))
     except csv.Error as ce:
         logger.warn('DECODE FAIL: %s %s', filepath, ce.message)
         pass
@@ -180,12 +176,12 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
     sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
-    bigram_transformer = Phrases(sentences)
+    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
     logger.info('Bigram phraser')
     bigram_phraser = Phraser(bigram_transformer)
 
     logger.info('Trigram phrases')
-    trigram_transformer = Phrases(bigram_phraser[sentences])
+    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
     logger.info('Trigram phraser')
     trigram_phraser = Phraser(trigram_transformer)
 
