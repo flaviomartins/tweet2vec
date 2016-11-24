@@ -140,7 +140,7 @@ Filtered  = re.compile(
     ).decode('utf-8')), re.UNICODE)
 
 
-def process_texts(texts, lemmatize=False):
+def process_texts(texts, lemmatize=True):
     """
     Function to process texts. Following are the steps we take:
 
