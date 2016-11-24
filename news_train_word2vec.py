@@ -85,8 +85,8 @@ def process_file(filepath):
             try:
                 data = json.loads(line)
             except ValueError as ve:
-                data = ''
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
+                continue
         if 'text' in data:
             result.append(TOKENIZER.tokenize(data['text']))
     return result

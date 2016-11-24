@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function, unicode_literals, division
+import io
 from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import gzip
@@ -87,7 +88,7 @@ def process_file(filepath):
     if filepath.endswith('.gz'):
         f = gzip.open(filepath)
     else:
-        f = open(filepath)
+        f = io.open(filepath, 'r', encoding='utf-8')
 
     result = []
     for line in f:
@@ -97,8 +98,8 @@ def process_file(filepath):
             try:
                 data = json.loads(line)
             except ValueError as ve:
-                data = ''
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
+                continue
         if 'text' in data:
             result.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
