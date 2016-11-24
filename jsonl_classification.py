@@ -25,7 +25,7 @@ import re
 from gensim.models import Phrases, LdaModel, LdaMulticore
 from gensim.models.phrases import Phraser
 from gensim.corpora import Dictionary
-from gensim.utils import ClippedCorpus, lemmatize
+from gensim import utils
 from nltk.corpus import stopwords
 from twokenize import twokenize
 
@@ -101,7 +101,7 @@ def process_file(filepath):
                 data = ''
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
         if 'text' in data:
-            result.append(twokenize.tokenizeRawTweetText(data['text']))
+            result.append(twokenize.tokenizeRawTweetText(data['text'].encode('unicode-escape')))
     f.close()
     return process_texts(result)
 
@@ -129,13 +129,15 @@ Filtered  = re.compile(
     ).decode('utf-8')), re.UNICODE)
 
 
-def process_texts(texts):
+def process_texts(texts, lemmatize=True):
     """
     Function to process texts. Following are the steps we take:
 
     1. Filter mentions, etc.
     1. Lowercasing.
     2. Stopword Removal.
+    3. Lemmatization (not stem since stemming can reduce the interpretability).
+    OR
     3. Possessive Filtering.
 
     Parameters:
@@ -148,9 +150,17 @@ def process_texts(texts):
     """
 
     texts = [[word for word in line if not Filtered.match(word)] for line in texts]
-    texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     texts = [[word for word in line if word not in stops] for line in texts]
-    texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+    if lemmatize:
+        texts = [[
+                     word.split('/')[0] for word in utils.lemmatize(' '.join(line),
+                                                                    allowed_tags=re.compile('(NN)'),
+                                                                    min_length=3)
+                     ] for line in texts
+                 ]
+    else:
+        texts = [[word.replace("'s", "") for word in line if word not in stops] for line in texts]
+        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
     return texts
 
 
@@ -174,7 +184,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=100, chunk_size=200
     passes = nr_passes
     iterations = nr_iter
     eval_every = None  # Don't evaluate model perplexity, takes too much time.
-    sentences = ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
     bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
