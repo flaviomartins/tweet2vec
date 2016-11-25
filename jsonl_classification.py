@@ -164,7 +164,8 @@ def process_file(filepath):
         f = io.open(filepath, 'rt', encoding='utf-8')
 
     result = []
-    for line in f:
+    count = 0
+    for lno, line in enumerate(f):
         if isinstance(line, six.binary_type):
             try:
                 line = line.decode('utf-8')
@@ -187,8 +188,14 @@ def process_file(filepath):
                 detected = detector.detect(long_id, data['text'])
                 if detected == 'en':
                     result.append(twokenize.tokenizeRawTweetText(data['text']))
+                    count += 1
+                if count < 0.5*lno > 5:
+                    logger.warn('Probably not en : %s : %d < 0.5*%d : %s', detected, count, lno, filepath)
+                    result = []
+                    break
             else:
                 result.append(twokenize.tokenizeRawTweetText(data['text']))
+                count += 1
     f.close()
     return process_texts(result)
 
