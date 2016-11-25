@@ -262,7 +262,7 @@ def process_texts(texts, lemmatize=True):
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int)
 )
-def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=100, chunk_size=2000, nr_passes=20, nr_iter=400,
+def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=20, nr_iter=400,
          job_size=1, max_docs=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     # Set training parameters.
