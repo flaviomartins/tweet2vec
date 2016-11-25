@@ -33,9 +33,76 @@ from gensim.corpora import Dictionary
 from gensim import utils
 from nltk.corpus import stopwords
 from twokenize import twokenize
+from ldig import ldig
+import numpy
+import sqlite3
 
 logger = logging.getLogger(__name__)
 stops = set(stopwords.words('english'))  # nltk stopwords list
+
+
+class Detector(object):
+    def __init__(self, modeldir, database):
+        self.ldig = ldig.ldig(modeldir)
+        self.features = self.ldig.load_features()
+        self.trie = self.ldig.load_da()
+        self.labels = self.ldig.load_labels()
+        self.param = numpy.load(self.ldig.param)
+        self.cache = {}
+        # sqlite3 backed storage
+        self.con = sqlite3.connect(database)
+        self.con.row_factory = sqlite3.Row
+        # self.con.isolation_level = None
+        # load cache
+        cur = self.con.cursor()
+        try:
+            cur.execute('CREATE TABLE lang (id integer, lang string, PRIMARY KEY(id))')
+        except:
+            pass
+
+        for row in cur.execute('SELECT id, lang FROM lang'):
+            self.cache[row['id']] = row['lang']
+
+        logger.info('Cache loaded with {} language annotations.'.format(len(self.cache)))
+
+    # prediction probability
+    def predict(self, events):
+        sum_w = numpy.dot(self.param[events.keys(),].T, events.values())
+        exp_w = numpy.exp(sum_w - sum_w.max())
+        return exp_w / exp_w.sum()
+
+    def likelihood(self, st):
+        label, text, org_text = ldig.normalize_text(st)
+        events = self.trie.extract_features(u"\u0001" + text + u"\u0001")
+        y = self.predict(events)
+        predict_k = y.argmax()
+
+        predict_lang = self.labels[predict_k]
+        if y[predict_k] < 0.6: predict_lang = ""
+        return predict_lang
+
+    def detect(self, id, st):
+        if id in self.cache:
+            return self.cache[id]
+        else:
+            predict_lang = self.likelihood(st)
+
+            if id > 0:
+                self.cache[id] = predict_lang
+                # save to database
+                cur = self.con.cursor()
+                try:
+                    cur.execute('INSERT INTO lang VALUES (?, ?)', (id, predict_lang))
+                    if len(self.cache) % 10000 == 0:
+                        self.con.commit()
+                        logger.info('Cache has {} language annotations.'.format(len(self.cache)))
+                except:
+                    pass
+
+            return predict_lang
+
+
+detector = Detector('./ldig/models/model.latin.20120315', './ldig.sqlite3')
 
 
 class MultipleFileSentences(object):
@@ -103,6 +170,7 @@ def process_file(filepath):
             except UnicodeDecodeError as ude:
                 logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
                 continue
+
         try:
             data = ujson.loads(line)
         except ValueError:
@@ -111,8 +179,15 @@ def process_file(filepath):
             except ValueError as ve:
                 logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
                 continue
+
         if 'text' in data:
-            result.append(twokenize.tokenizeRawTweetText(data['text']))
+            if detector is not None and 'id' in data:
+                long_id = data['id']
+                detected = detector.detect(long_id, data['text'])
+                if detected == 'en':
+                    result.append(twokenize.tokenizeRawTweetText(data['text']))
+            else:
+                result.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
     return process_texts(result)
 
