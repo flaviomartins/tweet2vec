@@ -35,35 +35,19 @@ from nltk.corpus import stopwords
 from twokenize import twokenize
 from ldig import ldig
 import numpy
-import sqlite3
 
 logger = logging.getLogger(__name__)
 stops = set(stopwords.words('english'))  # nltk stopwords list
 
 
 class Detector(object):
-    def __init__(self, modeldir, database):
+    def __init__(self, modeldir):
         self.ldig = ldig.ldig(modeldir)
         self.features = self.ldig.load_features()
         self.trie = self.ldig.load_da()
         self.labels = self.ldig.load_labels()
         self.param = numpy.load(self.ldig.param)
         self.cache = {}
-        # sqlite3 backed storage
-        self.con = sqlite3.connect(database)
-        self.con.row_factory = sqlite3.Row
-        # self.con.isolation_level = None
-        # load cache
-        cur = self.con.cursor()
-        try:
-            cur.execute('CREATE TABLE lang (id integer, lang string, PRIMARY KEY(id))')
-        except:
-            pass
-
-        for row in cur.execute('SELECT id, lang FROM lang'):
-            self.cache[row['id']] = row['lang']
-
-        logger.info('Cache loaded with {} language annotations.'.format(len(self.cache)))
 
     # prediction probability
     def predict(self, events):
@@ -89,21 +73,11 @@ class Detector(object):
 
             if id > 0:
                 self.cache[id] = predict_lang
-                # save to database
-                cur = self.con.cursor()
-                try:
-                    cur.execute('INSERT INTO lang VALUES (?, ?)', (id, predict_lang))
-                    if len(self.cache) % 10000 == 0:
-                        self.con.commit()
-                        logger.info('Cache has {} language annotations.'.format(len(self.cache)))
-                except:
-                    pass
 
             return predict_lang
 
 
-detector = Detector(path.join(path.dirname(__file__), 'ldig/models/model.latin.20120315'),
-                    path.join(path.dirname(__file__), 'ldig.sqlite3'))
+detector = Detector(path.join(path.dirname(__file__), 'ldig/models/model.latin.20120315'))
 
 
 class MultipleFileSentences(object):
@@ -183,16 +157,22 @@ def process_file(filepath):
                 continue
 
         if 'text' in data:
-            if detector is not None and 'id' in data:
-                long_id = data['id']
-                detected = detector.detect(long_id, data['text'])
-                if detected == 'en':
-                    result.append(twokenize.tokenizeRawTweetText(data['text']))
-                    count += 1
-                if count < 0.5*lno > 5:
-                    logger.warn('Probably not en : %s : %d < 0.5*%d : %s', detected, count, lno, filepath)
-                    result = []
-                    break
+            if detector is not None:
+                if lno <= 5:
+                    if 'id' in data:
+                        long_id = data['id']
+                        detected = detector.detect(long_id, data['text'])
+                        if detected == 'en':
+                            result.append(twokenize.tokenizeRawTweetText(data['text']))
+                            count += 1
+                else:
+                    if count >= 0.5*lno:
+                        result.append(twokenize.tokenizeRawTweetText(data['text']))
+                        count += 1
+                    else:
+                        logger.warn('Probably not en : %s : %d < 0.5*%d : %s', detected, count, lno, filepath)
+                        result = []
+                        break
             else:
                 result.append(twokenize.tokenizeRawTweetText(data['text']))
                 count += 1
