@@ -102,7 +102,8 @@ class Detector(object):
             return predict_lang
 
 
-detector = Detector('./ldig/models/model.latin.20120315', './ldig.sqlite3')
+detector = Detector(path.join(path.dirname(__file__), 'ldig/models/model.latin.20120315'),
+                    path.join(path.dirname(__file__), 'ldig.sqlite3'))
 
 
 class MultipleFileSentences(object):
