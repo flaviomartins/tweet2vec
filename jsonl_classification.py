@@ -27,7 +27,8 @@ except ImportError:
     import json as ujson
 import json
 import re
-from gensim.models import Phrases, LdaMulticore
+from gensim.models import Phrases, LdaModel, LdaMulticore
+from gensim.models.wrappers.ldamallet import LdaMallet, malletmodel2ldamodel
 from gensim.models.phrases import Phraser
 from gensim.corpora import Dictionary
 from gensim import utils
@@ -247,10 +248,11 @@ def process_texts(texts, lemmatize=True):
     nr_iter=("Number of iterations", "option", "i", int),
     chunk_size=("Chunk size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
-    max_docs=("Limit maximum number of documents", "option", "L", int)
+    max_docs=("Limit maximum number of documents", "option", "L", int),
+    mallet_path=("Path to mallet", "option", "-mallet_path", str),
 )
-def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=20, nr_iter=400,
-         job_size=1, max_docs=None):
+def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=1, nr_iter=400,
+         job_size=1, max_docs=None, mallet_path=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     # Set training parameters.
     num_topics = nr_topics
@@ -283,10 +285,18 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
     id2word = dictionary.id2token
 
     logger.info('LDA')
-    model = LdaMulticore(corpus=corpus, id2word=id2word, chunksize=chunksize, random_state=1, workers=n_workers,
-                         # alpha='auto', eta='auto',
-                         iterations=iterations, num_topics=num_topics,
-                         passes=passes, eval_every=eval_every)
+
+    if mallet_path is None:
+        model = LdaMulticore(corpus=corpus, num_topics=num_topics, id2word=id2word, workers=n_workers,
+                             chunksize=chunksize, passes=passes, batch=False,
+                             # alpha='symmetric', eta=None,
+                             decay=0.5, offset=1.0, eval_every=eval_every, iterations=iterations,
+                             gamma_threshold=0.001, random_state=1)
+    else:
+        mallet_model = LdaMallet(mallet_path,
+                                 corpus=corpus, num_topics=num_topics, alpha=50, id2word=id2word, workers=n_workers,
+                                 prefix=None, optimize_interval=0, iterations=iterations, topic_threshold=0.0)
+        model = malletmodel2ldamodel(mallet_model, gamma_threshold=0.001, iterations=50)
 
     top_topics = model.top_topics(corpus, num_words=20)
 
