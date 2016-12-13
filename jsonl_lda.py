@@ -33,11 +33,9 @@ from gensim.corpora import Dictionary
 from gensim import utils
 from nltk.corpus import stopwords
 from twokenize import twokenize
-from ldig_detector import Detector
 
 logger = logging.getLogger(__name__)
 stops = set(stopwords.words('english'))  # nltk stopwords list
-detector = Detector()
 
 
 class MultipleFileSentences(object):
@@ -117,25 +115,8 @@ def process_file(filepath):
                 continue
 
         if 'text' in data:
-            if detector is not None:
-                if lno <= 5:
-                    if 'id' in data:
-                        long_id = data['id']
-                        detected = detector.detect(long_id, data['text'])
-                        if detected == 'en':
-                            result.append(twokenize.tokenizeRawTweetText(data['text']))
-                            count += 1
-                else:
-                    if count >= 0.5*lno:
-                        result.append(twokenize.tokenizeRawTweetText(data['text']))
-                        count += 1
-                    else:
-                        logger.warn('Probably not en : %s : %d < 0.5*%d : %s', detected, count, lno, filepath)
-                        result = []
-                        break
-            else:
-                result.append(twokenize.tokenizeRawTweetText(data['text']))
-                count += 1
+            result.append(twokenize.tokenizeRawTweetText(data['text']))
+            count += 1
     f.close()
     return process_texts(result)
 
