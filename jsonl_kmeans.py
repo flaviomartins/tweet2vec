@@ -35,53 +35,13 @@ from gensim import utils
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from twokenize import twokenize
-from ldig import ldig
-import numpy
-np = numpy
+from ldig_detector import Detector
+
 
 logger = logging.getLogger(__name__)
 stops = set(stopwords.words('english'))  # nltk stopwords list
 stemmer = PorterStemmer()
-
-
-class Detector(object):
-    def __init__(self, modeldir):
-        self.ldig = ldig.ldig(modeldir)
-        self.features = self.ldig.load_features()
-        self.trie = self.ldig.load_da()
-        self.labels = self.ldig.load_labels()
-        self.param = numpy.load(self.ldig.param)
-        self.cache = {}
-
-    # prediction probability
-    def predict(self, events):
-        sum_w = numpy.dot(self.param[events.keys(),].T, events.values())
-        exp_w = numpy.exp(sum_w - sum_w.max())
-        return exp_w / exp_w.sum()
-
-    def likelihood(self, st):
-        label, text, org_text = ldig.normalize_text(st)
-        events = self.trie.extract_features(u"\u0001" + text + u"\u0001")
-        y = self.predict(events)
-        predict_k = y.argmax()
-
-        predict_lang = self.labels[predict_k]
-        if y[predict_k] < 0.6: predict_lang = ""
-        return predict_lang
-
-    def detect(self, id, st):
-        if id in self.cache:
-            return self.cache[id]
-        else:
-            predict_lang = self.likelihood(st)
-
-            if id > 0:
-                self.cache[id] = predict_lang
-
-            return predict_lang
-
-
-detector = Detector(path.join(path.dirname(__file__), 'ldig/models/model.latin.20120315'))
+detector = Detector()
 
 
 class MultipleFileSentences(object):
@@ -269,14 +229,14 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     iterations = nr_iter
     sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
-    logger.info('Kmeans')
+    logger.info('KMeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
                                  decode_error='strict', strip_accents=None, lowercase=False,
                                  preprocessor=None, tokenizer=just_split, analyzer='word',
                                  stop_words=None, token_pattern=r"(?u)\s.*\s",
                                  max_df=0.5, min_df=5,
                                  max_features=max_features, vocabulary=None, binary=True,  # binary=True -> tf=1 cap
-                                 dtype=np.int64, norm='l2', use_idf=use_idf, smooth_idf=True,
+                                 norm='l2', use_idf=use_idf, smooth_idf=True,
                                  sublinear_tf=False)  # sublinear_tf=True -> tf = 1 + log(tf)
 
     X = vectorizer.fit_transform(' '.join(sentence) for sentence in sentences)
