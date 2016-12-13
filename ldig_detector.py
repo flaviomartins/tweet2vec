@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 from ldig import ldig
 import numpy as np
 from os import path

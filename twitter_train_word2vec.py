@@ -28,14 +28,12 @@ try:
 except ImportError:
     import json as ujson
 import json
-import re
 from gensim.models import Word2Vec
 from gensim import utils
-from nltk.corpus import stopwords
 from twokenize import twokenize
+from preprocessing import process_texts
 
 logger = logging.getLogger(__name__)
-stops = set(stopwords.words('english'))  # nltk stopwords list
 
 NATIVE_METHOD = 'native'
 COMPAT_METHOD = 'compat'
@@ -140,64 +138,6 @@ def process_line(line):
         return twokenize.tokenizeRawTweetText(data['text'])
     else:
         return None
-
-
-# Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
-Filtered  = re.compile(
-    unicode(twokenize.regex_or(
-        twokenize.Hearts,
-        twokenize.url,
-        twokenize.Email,
-        twokenize.timeLike,
-        twokenize.numberWithCommas,
-        twokenize.numComb,
-        twokenize.emoticon,
-        twokenize.Arrows,
-        twokenize.entity,
-        twokenize.punctSeq,
-        twokenize.arbitraryAbbrev,
-        twokenize.separators,
-        twokenize.decorations,
-        # twokenize.embeddedApostrophe,
-        # twokenize.Hashtag,
-        twokenize.AtMention,
-        "(?:RT|rt)".encode('utf-8')
-    ).decode('utf-8')), re.UNICODE)
-
-
-def process_texts(texts, lemmatize=False):
-    """
-    Function to process texts. Following are the steps we take:
-
-    1. Filter mentions, etc.
-    1. Lowercasing.
-    2. Stopword Removal.
-    3. Lemmatization (not stem since stemming can reduce the interpretability).
-    OR
-    3. Possessive Filtering.
-
-    Parameters:
-    ----------
-    texts: Tokenized texts.
-
-    Returns:
-    -------
-    texts: Pre-processed tokenized texts.
-    """
-
-    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
-    texts = [[word for word in line if word not in stops] for line in texts]
-    if lemmatize:
-        texts = [[
-                     re.split('/', word)[0] for word in utils.lemmatize(' '.join(line),
-                                                                        allowed_tags=re.compile('(NN)'),
-                                                                        min_length=3)
-                     ] for line in texts
-                 ]
-    else:
-        texts = [[word.replace("'s", "") for word in line] for line in texts]
-        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
-    return texts
 
 
 @plac.annotations(
