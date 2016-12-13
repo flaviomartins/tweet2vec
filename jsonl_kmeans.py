@@ -3,121 +3,20 @@
 
 from __future__ import print_function, unicode_literals, division
 
-import gzip
-import io
 import logging
-from multiprocessing import cpu_count
-from os import path
-
-import six
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from toolz import partition_all
-
-# fails to import scandir < 3.5
-try:
-    from os import scandir, walk
-except ImportError:
-    from scandir import scandir, walk
-import fnmatch
-
 import plac
-try:
-    import ujson
-except ImportError:
-    import json as ujson
-import json
 
+from multiprocessing import cpu_count
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, MiniBatchKMeans
-
 from gensim import utils
-from twokenize import twokenize
-from preprocessing import process_texts
+from corpus.jsonl import JsonlDirSentences
 
 logger = logging.getLogger(__name__)
 
 
-class MultipleFileSentences(object):
-    def __init__(self, directory, n_workers=cpu_count()-1, job_size=1):
-        self.directory = directory
-        self.n_workers = n_workers
-        self.job_size = job_size
-
-    def __iter__(self):
-        jobs = partition_all(self.job_size, iter_jsons(self.directory))
-        with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
-            futures = []
-            for j, job in enumerate(jobs):
-                futures.append(executor.submit(process_job, job))
-                if j % self.n_workers == 0:
-                    for future in as_completed(futures):
-                        try:
-                            results = future.result()
-                        except Exception as exc:
-                            logger.error('generated an exception: %s', exc)
-                        else:
-                            logger.debug('job has %d sentences', len(results))
-                            for result in results:
-                                if result is not None:
-                                    yield result
-                    futures = []
-            for future in as_completed(futures):
-                try:
-                    results = future.result()
-                except Exception as exc:
-                    logger.error('generated an exception: %s', exc)
-                else:
-                    logger.debug('job has %d sentences', len(results))
-                    for result in results:
-                        if result is not None:
-                            yield result
-
-
-def iter_jsons(directory):
-    for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, '*.jsonl*'):
-            yield path.join(root, filename)
-
-
-def process_job(job):
-    results = []
-    for filepath in job:
-        result = process_file(filepath)
-        if result is not None:
-            results += result
-    return results
-
-
-def process_file(filepath):
-    if filepath.endswith('.gz'):
-        f = gzip.open(filepath)
-    else:
-        f = io.open(filepath, 'rt', encoding='utf-8')
-
-    result = []
-    count = 0
-    for lno, line in enumerate(f):
-        if isinstance(line, six.binary_type):
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError as ude:
-                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
-                continue
-
-        try:
-            data = ujson.loads(line)
-        except ValueError:
-            try:
-                data = json.loads(line)
-            except ValueError as ve:
-                logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
-                continue
-
-        if 'text' in data:
-            result.append(twokenize.tokenizeRawTweetText(data['text']))
-            count += 1
-    f.close()
-    return process_texts(result)
+def split_on_space(text):
+    return text.split(' ')
 
 
 @plac.annotations(
@@ -143,13 +42,13 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     num_clusters = nr_clusters
     batchsize = batch_size
     iterations = nr_iter
-    sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('KMeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
                                  decode_error='strict', strip_accents=None, lowercase=False,
-                                 preprocessor=None, tokenizer=just_split, analyzer='word',
-                                 stop_words=None, token_pattern=r"(?u)\s.*\s",
+                                 preprocessor=None, tokenizer=split_on_space, analyzer='word',
+                                 stop_words=None, token_pattern=None,
                                  max_df=0.5, min_df=5,
                                  max_features=max_features, vocabulary=None, binary=True,  # binary=True -> tf=1 cap
                                  norm='l2', use_idf=use_idf, smooth_idf=True,
@@ -175,10 +74,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         for ind in order_centroids[i, :20]:
             print(' %s' % terms[ind], end='')
         print()
-
-
-def just_split(text):
-    return text.split(' ')
 
 
 if __name__ == '__main__':
