@@ -27,9 +27,8 @@ except ImportError:
     import json as ujson
 import json
 import re
-from gensim.models import Phrases, LdaModel, LdaMulticore
+from gensim.models import LdaModel, LdaMulticore
 from gensim.models.wrappers.ldamallet import LdaMallet, malletmodel2ldamodel
-from gensim.models.phrases import Phraser
 from gensim.corpora import Dictionary
 from gensim import utils
 from nltk.corpus import stopwords
@@ -262,22 +261,12 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
     eval_every = None  # Don't evaluate model perplexity, takes too much time.
     sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
-    logger.info('Bigram phrases')
-    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
-    logger.info('Bigram phraser')
-    bigram_phraser = Phraser(bigram_transformer)
-
-    logger.info('Trigram phrases')
-    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
-    logger.info('Trigram phraser')
-    trigram_phraser = Phraser(trigram_transformer)
-
     logger.info('Dictionary')
-    dictionary = Dictionary(trigram_phraser[bigram_phraser[sentences]])
+    dictionary = Dictionary(sentences)
     dictionary.filter_extremes(no_below=20, no_above=0.5)
 
     logger.info('Corpus')
-    corpus = [dictionary.doc2bow(text) for text in trigram_phraser[bigram_phraser[sentences]]]
+    corpus = [dictionary.doc2bow(text) for text in sentences]
 
     logger.info('id2word')
     # Make a index to word dictionary.

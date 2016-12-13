@@ -28,8 +28,7 @@ except ImportError:
 import json
 import yaml
 import re
-from gensim.models import Phrases, Word2Vec
-from gensim.models.phrases import Phraser
+from gensim.models import Word2Vec
 from gensim import utils
 from nltk.corpus import stopwords
 from twokenize import twokenize
@@ -212,18 +211,8 @@ def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-
         )
         sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, sources, n_workers, job_size), max_docs=max_docs)
 
-        logger.info('Bigram phrases')
-        bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
-        logger.info('Bigram phraser')
-        bigram_phraser = Phraser(bigram_transformer)
-
-        logger.info('Trigram phrases')
-        trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
-        logger.info('Trigram phraser')
-        trigram_phraser = Phraser(trigram_transformer)
-
-        model.build_vocab(trigram_phraser[bigram_phraser[sentences]], progress_per=10000)
-        model.train(trigram_phraser[bigram_phraser[sentences]])
+        model.build_vocab(sentences, progress_per=10000)
+        model.train(sentences)
 
         model.save(path.join(out_dir, topic + '.model'))
 

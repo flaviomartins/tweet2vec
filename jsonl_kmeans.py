@@ -31,8 +31,6 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, MiniBatchKMeans
 
-from gensim.models import Phrases
-from gensim.models.phrases import Phraser
 from gensim import utils
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
@@ -271,16 +269,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     iterations = nr_iter
     sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
-    logger.info('Bigram phrases')
-    bigram_transformer = Phrases(sentences, min_count=5, threshold=100)
-    logger.info('Bigram phraser')
-    bigram_phraser = Phraser(bigram_transformer)
-
-    logger.info('Trigram phrases')
-    trigram_transformer = Phrases(bigram_phraser[sentences], min_count=5, threshold=100)
-    logger.info('Trigram phraser')
-    trigram_phraser = Phraser(trigram_transformer)
-
     logger.info('Kmeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
                                  decode_error='strict', strip_accents=None, lowercase=False,
@@ -291,7 +279,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                                  dtype=np.int64, norm='l2', use_idf=use_idf, smooth_idf=True,
                                  sublinear_tf=False)  # sublinear_tf=True -> tf = 1 + log(tf)
 
-    X = vectorizer.fit_transform(' '.join(sentence) for sentence in trigram_phraser[bigram_phraser[sentences]])
+    X = vectorizer.fit_transform(' '.join(sentence) for sentence in sentences)
 
     if minibatch:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
