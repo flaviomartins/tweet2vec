@@ -27,18 +27,23 @@ except ImportError:
     import json as ujson
 import json
 import re
-from gensim.models import Phrases, LdaModel, LdaMulticore
-from gensim.models.wrappers.ldamallet import LdaMallet, malletmodel2ldamodel
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import KMeans, MiniBatchKMeans
+
+from gensim.models import Phrases
 from gensim.models.phrases import Phraser
-from gensim.corpora import Dictionary
 from gensim import utils
 from nltk.corpus import stopwords
+from nltk.stem.porter import PorterStemmer
 from twokenize import twokenize
 from ldig import ldig
 import numpy
+np = numpy
 
 logger = logging.getLogger(__name__)
 stops = set(stopwords.words('english'))  # nltk stopwords list
+stemmer = PorterStemmer()
 
 
 class Detector(object):
@@ -224,18 +229,20 @@ def process_texts(texts, lemmatize=True):
     texts: Pre-processed tokenized texts.
     """
 
-    texts = [[word for word in line if not Filtered.match(word)] for line in texts]
-    texts = [[word for word in line if word not in stops] for line in texts]
+    texts = [[token for token in line if not Filtered.match(token)] for line in texts]
+    texts = [[token.lower() for token in line] for line in texts]
+    texts = [[token for token in line if token not in stops] for line in texts]
     if lemmatize:
         texts = [[
-                     re.split('/', word)[0] for word in utils.lemmatize(' '.join(line),
-                                                                        allowed_tags=re.compile('(NN)'),
-                                                                        min_length=3)
+                     re.split('/', token)[0] for token in utils.lemmatize(' '.join(line),
+                                                                          allowed_tags=re.compile('(NN)'),
+                                                                          min_length=3)
                      ] for line in texts
                  ]
     else:
-        texts = [[word.replace("'s", "") for word in line] for line in texts]
-        texts = [[token.lower() for token in line if 3 <= len(token)] for line in texts]
+        texts = [[token.replace("'s", "") for token in line] for line in texts]
+        texts = [[stemmer.stem(token) for token in line] for line in texts]
+        texts = [[token for token in line if 3 <= len(token)] for line in texts]
     return texts
 
 
@@ -243,23 +250,25 @@ def process_texts(texts, lemmatize=True):
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
     n_workers=("Number of workers", "option", "n", int),
-    nr_topics=("Number of topics", "option", "t", int),
-    nr_passes=("Number of passes", "option", "p", int),
+    nr_clusters=("Number of clusters", "option", "t", int),
     nr_iter=("Number of iterations", "option", "i", int),
-    chunk_size=("Chunk size", "option", "c", int),
+    batch_size=("Batch size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int),
-    mallet_path=("Path to mallet", "option", "-mallet_path", str),
+    max_features=("Maximum number of features (dimensions) to extract from text.", "option", "-max-features", int),
+    no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "-no_minibatch", bool),
+    no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "-no_idf", bool),
+    verbose=("Print progress reports inside k-means algorithm.", "flag", "verbose", bool)
 )
-def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=1, nr_iter=400,
-         job_size=1, max_docs=None, mallet_path=None):
+def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
+         job_size=1, max_docs=None, max_features=10000, no_minibatch=False, no_idf=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    minibatch = not no_minibatch
+    use_idf = not no_idf
     # Set training parameters.
-    num_topics = nr_topics
-    chunksize = chunk_size
-    passes = nr_passes
+    num_clusters = nr_clusters
+    batchsize = batch_size
     iterations = nr_iter
-    eval_every = None  # Don't evaluate model perplexity, takes too much time.
     sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, n_workers, job_size), max_docs=max_docs)
 
     logger.info('Bigram phrases')
@@ -272,43 +281,40 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
     logger.info('Trigram phraser')
     trigram_phraser = Phraser(trigram_transformer)
 
-    logger.info('Dictionary')
-    dictionary = Dictionary(trigram_phraser[bigram_phraser[sentences]])
-    dictionary.filter_extremes(no_below=20, no_above=0.5)
+    logger.info('Kmeans')
+    vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
+                                 decode_error='strict', strip_accents=None, lowercase=False,
+                                 preprocessor=None, tokenizer=just_split, analyzer='word',
+                                 stop_words=None, token_pattern=r"(?u)\s.*\s",
+                                 max_df=0.5, min_df=5,
+                                 max_features=max_features, vocabulary=None, binary=True,  # binary=True -> tf=1 cap
+                                 dtype=np.int64, norm='l2', use_idf=use_idf, smooth_idf=True,
+                                 sublinear_tf=False)  # sublinear_tf=True -> tf = 1 + log(tf)
 
-    logger.info('Corpus')
-    corpus = [dictionary.doc2bow(text) for text in trigram_phraser[bigram_phraser[sentences]]]
+    X = vectorizer.fit_transform(' '.join(sentence) for sentence in trigram_phraser[bigram_phraser[sentences]])
 
-    logger.info('id2word')
-    # Make a index to word dictionary.
-    temp = dictionary[0]  # This is only to "load" the dictionary.
-    id2word = dictionary.id2token
-
-    logger.info('LDA')
-
-    if mallet_path is None:
-        model = LdaMulticore(corpus=corpus, num_topics=num_topics, id2word=id2word, workers=n_workers,
-                             chunksize=chunksize, passes=passes, batch=False,
-                             # alpha='symmetric', eta=None,
-                             decay=0.5, offset=1.0, eval_every=eval_every, iterations=iterations,
-                             gamma_threshold=0.001, random_state=1)
-
-        top_topics = model.top_topics(corpus, num_words=20)
-
-        # Average topic coherence is the sum of topic coherences of all topics, divided by the number of topics.
-        avg_topic_coherence = sum([t[1] for t in top_topics]) / num_topics
-        print('Average topic coherence: %.4f.' % avg_topic_coherence)
-
-        from pprint import pprint
-        pprint(top_topics)
-
-        model.save(out_loc)
+    if minibatch:
+        km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
+                             init_size=batchsize, batch_size=batchsize, verbose=verbose)
     else:
-        mallet_model = LdaMallet(mallet_path,
-                                 corpus=corpus, num_topics=num_topics, alpha=50, id2word=id2word, workers=n_workers,
-                                 prefix=path.dirname(out_loc), optimize_interval=0, iterations=iterations,
-                                 topic_threshold=0.0)
-        model = malletmodel2ldamodel(mallet_model, gamma_threshold=0.001, iterations=50)
+        km = KMeans(n_clusters=num_clusters, init='k-means++', max_iter=iterations, n_init=1,
+                    verbose=verbose)
+
+    km.fit(X)
+
+    print("Top terms per cluster:")
+    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+
+    terms = vectorizer.get_feature_names()
+    for i in range(num_clusters):
+        print("Cluster %d:" % i, end='')
+        for ind in order_centroids[i, :20]:
+            print(' %s' % terms[ind], end='')
+        print()
+
+
+def just_split(text):
+    return text.split(' ')
 
 
 if __name__ == '__main__':
