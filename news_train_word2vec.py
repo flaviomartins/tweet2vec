@@ -3,117 +3,18 @@
 
 from __future__ import print_function, unicode_literals, division
 
-import gzip
-import io
 import logging
-from multiprocessing import cpu_count
+import plac
+import yaml
 from os import path
 
-import six
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from toolz import partition_all
+from multiprocessing import cpu_count
 
-# fails to import scandir < 3.5
-try:
-    from os import scandir, walk
-except ImportError:
-    from scandir import scandir, walk
-import fnmatch
-
-import plac
-try:
-    import ujson
-except ImportError:
-    import json as ujson
-import json
-import yaml
 from gensim.models import Word2Vec
 from gensim import utils
-from twokenize import twokenize
-from preprocessing import process_texts
+from corpus.jsonl import JsonlDirSentences
 
 logger = logging.getLogger(__name__)
-
-
-class MultipleFileSentences(object):
-    def __init__(self, directory, prefixes, n_workers=cpu_count()-1, job_size=1):
-        self.directory = directory
-        self.prefixes = prefixes
-        self.n_workers = n_workers
-        self.job_size = job_size
-
-    def __iter__(self):
-        jobs = partition_all(self.job_size, iter_jsons(self.directory, self.prefixes))
-        with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
-            futures = []
-            for j, job in enumerate(jobs):
-                futures.append(executor.submit(process_job, job))
-                if j % self.n_workers == 0:
-                    for future in as_completed(futures):
-                        try:
-                            results = future.result()
-                        except Exception as exc:
-                            logger.error('generated an exception: %s', exc)
-                        else:
-                            logger.debug('job has %d sentences', len(results))
-                            for result in results:
-                                if result is not None:
-                                    yield result
-                    futures = []
-            for future in as_completed(futures):
-                try:
-                    results = future.result()
-                except Exception as exc:
-                    logger.error('generated an exception: %s', exc)
-                else:
-                    logger.debug('job has %d sentences', len(results))
-                    for result in results:
-                        if result is not None:
-                            yield result
-
-
-def iter_jsons(directory, prefixes):
-    for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, '*.jsonl*'):
-            if filename.split('.')[0] in prefixes:
-                yield path.join(root, filename)
-
-
-def process_job(job):
-    results = []
-    for filepath in job:
-        result = process_file(filepath)
-        if result is not None:
-            results += result
-    return results
-
-
-def process_file(filepath):
-    if filepath.endswith('.gz'):
-        f = gzip.open(filepath)
-    else:
-        f = io.open(filepath, 'rt', encoding='utf-8')
-
-    result = []
-    for line in f:
-        if isinstance(line, six.binary_type):
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError as ude:
-                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
-                continue
-        try:
-            data = ujson.loads(line)
-        except ValueError:
-            try:
-                data = json.loads(line)
-            except ValueError as ve:
-                logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
-                continue
-        if 'text' in data:
-            result.append(twokenize.tokenizeRawTweetText(data['text']))
-    f.close()
-    return process_texts(result)
 
 
 @plac.annotations(
@@ -149,7 +50,8 @@ def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-
             negative=negative,
             iter=nr_iter
         )
-        sentences = utils.ClippedCorpus(MultipleFileSentences(in_dir, sources, n_workers, job_size), max_docs=max_docs)
+        prefixes = [source.lower() for source in sources]
+        sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, prefixes, n_workers, job_size), max_docs=max_docs)
 
         model.build_vocab(sentences, progress_per=10000)
         model.train(sentences)
