@@ -51,7 +51,8 @@ def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-
             iter=nr_iter
         )
         prefixes = [source.lower() for source in sources]
-        sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, prefixes, n_workers, job_size), max_docs=max_docs)
+        sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, prefixes=prefixes),
+                                        max_docs=max_docs)
 
         model.build_vocab(sentences, progress_per=10000)
         model.train(sentences)

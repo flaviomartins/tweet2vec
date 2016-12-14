@@ -42,7 +42,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     num_clusters = nr_clusters
     batchsize = batch_size
     iterations = nr_iter
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=False),
+                                    max_docs=max_docs)
 
     logger.info('KMeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',

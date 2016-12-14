@@ -40,7 +40,8 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
         negative=negative,
         iter=nr_iter
     )
-    sentences = utils.ClippedCorpus(CsvDirSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(CsvDirSentences(in_dir, n_workers, job_size),
+                                    max_docs=max_docs)
 
     model.build_vocab(sentences, progress_per=10000)
     model.train(sentences)

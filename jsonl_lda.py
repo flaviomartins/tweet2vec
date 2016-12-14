@@ -39,7 +39,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
     passes = nr_passes
     iterations = nr_iter
     eval_every = None  # Don't evaluate model perplexity, takes too much time.
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size), max_docs=max_docs)
+    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size),
+                                    max_docs=max_docs)
 
     logger.info('Dictionary')
     dictionary = Dictionary(sentences)

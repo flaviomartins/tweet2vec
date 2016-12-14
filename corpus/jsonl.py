@@ -30,18 +30,19 @@ logger = logging.getLogger(__name__)
 
 
 class JsonlDirSentences(object):
-    def __init__(self, directory, prefixes=None, n_workers=cpu_count()-1, job_size=1):
+    def __init__(self, directory, n_workers=cpu_count()-1, job_size=1, lemmatize=True, prefixes=None):
         self.directory = directory
-        self.prefixes = prefixes
         self.n_workers = n_workers
         self.job_size = job_size
+        self.lemmatize = lemmatize
+        self.prefixes = prefixes
 
     def __iter__(self):
         jobs = partition_all(self.job_size, iter_files(self.directory, self.prefixes))
         with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
             futures = []
             for j, job in enumerate(jobs):
-                futures.append(executor.submit(process_job, job))
+                futures.append(executor.submit(process_job, job, self.lemmatize))
                 if j % self.n_workers == 0:
                     for future in as_completed(futures):
                         try:
@@ -73,16 +74,16 @@ def iter_files(directory, prefixes):
                 yield path.join(root, filename)
 
 
-def process_job(job):
+def process_job(job, lemmatize):
     results = []
     for filepath in job:
-        result = process_file(filepath)
+        result = process_file(filepath, lemmatize)
         if result is not None:
             results += result
     return results
 
 
-def process_file(filepath):
+def process_file(filepath, lemmatize):
     if filepath.endswith('.gz'):
         f = gzip.open(filepath)
     else:
@@ -107,4 +108,4 @@ def process_file(filepath):
         if 'text' in data:
             result.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
-    return process_texts(result)
+    return process_texts(result, lemmatize=lemmatize)
