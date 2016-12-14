@@ -74,6 +74,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         print("%d:" % i, end='')
         for ind in order_centroids[i, :10]:
             print(' %s' % repr(terms[ind]), end='')
+        print()
 
 
 if __name__ == '__main__':
