@@ -71,10 +71,9 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     terms = vectorizer.get_feature_names()
     for i in range(num_clusters):
-        print("Cluster %d:" % i, end='')
-        for ind in order_centroids[i, :20]:
-            print(' %s' % terms[ind], end='')
-        print()
+        print("%d:" % i, end='')
+        for ind in order_centroids[i, :10]:
+            print(' %s' % repr(terms[ind]), end='')
 
 
 if __name__ == '__main__':
