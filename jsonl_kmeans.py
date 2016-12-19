@@ -70,7 +70,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     if minibatch:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
-                             init_size=batchsize, batch_size=batchsize, verbose=verbose)
+                             init_size=3*batchsize, batch_size=batchsize, verbose=verbose)
     else:
         km = KMeans(n_clusters=num_clusters, init='k-means++', max_iter=iterations, n_init=1,
                     verbose=verbose)
