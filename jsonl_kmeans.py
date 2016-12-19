@@ -28,24 +28,26 @@ def split_on_space(text):
     batch_size=("Batch size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int),
-    max_features=("Maximum number of features (dimensions) to extract from text.", "option", "D", int),
     no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "nm", bool),
+    no_lemmas=("Disable Lemmatization.", "flag", "nl", bool),
+    max_features=("Maximum number of features (dimensions) to extract from text.", "option", "D", int),
     binary_tf=("Make tf term in tf-idf binary.", "flag", "b", bool),
     sublinear_tf=("Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).", "flag", "l", bool),
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
-         job_size=1, max_docs=None, max_features=10000, no_minibatch=False,
+         job_size=1, max_docs=None, no_lemmas=False, max_features=10000, no_minibatch=False,
          binary_tf=False, sublinear_tf=False, no_idf=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     minibatch = not no_minibatch
+    lemmatize = not no_lemmas
     use_idf = not no_idf
     # Set training parameters.
     num_clusters = nr_clusters
     batchsize = batch_size
     iterations = nr_iter
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=False),
+    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
                                     max_docs=max_docs)
 
     logger.info('KMeans')

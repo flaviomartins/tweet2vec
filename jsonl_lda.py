@@ -31,15 +31,16 @@ logger = logging.getLogger(__name__)
     mallet_path=("Path to mallet", "option", "-mallet_path", str),
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=1, nr_iter=400,
-         job_size=1, max_docs=None, mallet_path=None):
+         job_size=1, max_docs=None, no_lemmas=False, mallet_path=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+    lemmatize = not no_lemmas
     # Set training parameters.
     num_topics = nr_topics
     chunksize = chunk_size
     passes = nr_passes
     iterations = nr_iter
     eval_every = None  # Don't evaluate model perplexity, takes too much time.
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size),
+    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
                                     max_docs=max_docs)
 
     logger.info('Dictionary')
