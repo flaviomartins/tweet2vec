@@ -3,6 +3,7 @@
 
 from __future__ import print_function, unicode_literals, division
 
+import io
 import logging
 import plac
 
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 def split_on_space(text):
     return text.split(' ')
+
+
+def iter_sentences(sentences):
+    for sentence in sentences:
+        yield ' '.join([token.decode('utf-8') for token in sentence])
 
 
 @plac.annotations(
@@ -52,7 +58,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     logger.info('KMeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
-                                 decode_error='strict', strip_accents=None, lowercase=False,
+                                 decode_error='ignore', strip_accents=None, lowercase=False,
                                  preprocessor=None, tokenizer=split_on_space, analyzer='word',
                                  stop_words=None, token_pattern=None,
                                  max_df=0.5, min_df=5,
@@ -60,7 +66,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                                  norm='l2', use_idf=use_idf, smooth_idf=True,
                                  sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
 
-    X = vectorizer.fit_transform(' '.join(sentence) for sentence in sentences)
+    X = vectorizer.fit_transform(iter_sentences(sentences))
 
     if minibatch:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
@@ -71,15 +77,15 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     km.fit(X)
 
-    print("Top terms per cluster:")
     order_centroids = km.cluster_centers_.argsort()[:, ::-1]
-
     terms = vectorizer.get_feature_names()
-    for i in range(num_clusters):
-        print("%d:" % i, end='')
-        for ind in order_centroids[i, :10]:
-            print(' %s' % repr(terms[ind]), end='')
-        print()
+
+    with io.open(out_loc, 'wt', encoding='utf-8') as f:
+        for i in range(num_clusters):
+            f.write('{:d}'.format(i))
+            for ind in order_centroids[i, :20]:
+                f.write(' {}'.format(terms[ind]))
+            f.write('\n')
 
 
 if __name__ == '__main__':
