@@ -11,6 +11,9 @@ import plac
 
 from multiprocessing import cpu_count
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import scipy.special as special
+import numpy as np
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
@@ -50,11 +53,13 @@ def iter_sentences(sentences):
     binary_tf=("Make tf term in tf-idf binary.", "flag", "b", bool),
     sublinear_tf=("Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).", "flag", "l", bool),
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
+    cosine=("Use cosine similarity in place of euclidean distances.", "flag", "cos", bool),
+    jsd=("Use Jensen-Shannon divergence in place of euclidean distances.", "flag", "jsd", bool),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, no_minibatch=False,
-         binary_tf=False, sublinear_tf=False, no_idf=False, verbose=False):
+         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     minibatch = not no_minibatch
@@ -96,6 +101,15 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         km = KMeans(n_clusters=num_clusters, init='k-means++', max_iter=iterations, n_init=1,
                     verbose=verbose)
 
+    if jsd:
+        logger.info('Using Jensen-Shannon divergence')
+        # monkey patch (ensure jsd function is used)
+        km.euclidean_distances = jsd_euclidean_distances
+    elif cosine:
+        logger.info('Using cosine similarity')
+        # we can use cosine_similarity because vectors are 'l2' normalized in TfidfVectorizer
+        km.euclidean_distances = cosine_similarity_euclidean_distances
+
     km.fit(X)
 
     order_centroids = km.cluster_centers_.argsort()[:, ::-1]
@@ -107,6 +121,43 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
             for ind in order_centroids[i, :20]:
                 f.write(' {}'.format(terms[ind]))
             f.write('\n')
+
+
+def cosine_similarity_euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False):
+    return cosine_similarity(X, Y)
+
+
+def jsd_euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False):
+    return jensen_shannon_divergence(X, Y)
+
+
+# snipped from gh:luispedro/scipy
+def jensen_shannon_divergence(a, b):
+    """Compute Jensen-Shannon Divergence
+    Parameters
+    ----------
+    a : array-like
+        possibly unnormalized distribution.
+    b : array-like
+        possibly unnormalized distribution. Must be of same shape as ``a``.
+    Returns
+    -------
+    j : float
+    See Also
+    --------
+    jsd_matrix : function
+        Computes all pair-wise distances for a set of measurements
+    entropy : function
+        Computes entropy and K-L divergence
+    """
+    a = np.asanyarray(a, dtype=float)
+    b = np.asanyarray(b, dtype=float)
+    a = a/a.sum(axis=0)
+    b = b/b.sum(axis=0)
+    m = (a + b)
+    m /= 2.
+    m = np.where(m, m, 1.)
+    return 0.5*np.sum(special.xlogy(a, a/m) + special.xlogy(b, b/m), axis=0)
 
 
 if __name__ == '__main__':
