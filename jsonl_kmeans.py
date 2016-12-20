@@ -4,6 +4,7 @@
 from __future__ import print_function, unicode_literals, division
 
 import io
+import six
 import logging
 import plac
 
@@ -22,7 +23,12 @@ def split_on_space(text):
 
 def iter_sentences(sentences):
     for sentence in sentences:
-        yield ' '.join([token.decode('utf-8') for token in sentence])
+        unicode_sentence = []
+        for token in sentence:
+            if isinstance(token, six.binary_type):
+                token = token.decode('utf-8')
+            unicode_sentence.append(token)
+        yield ' '.join([token for token in unicode_sentence])
 
 
 @plac.annotations(
@@ -58,7 +64,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     logger.info('KMeans')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
-                                 decode_error='ignore', strip_accents=None, lowercase=False,
+                                 decode_error='strict', strip_accents=None, lowercase=False,
                                  preprocessor=None, tokenizer=split_on_space, analyzer='word',
                                  stop_words=None, token_pattern=None,
                                  max_df=0.5, min_df=5,
