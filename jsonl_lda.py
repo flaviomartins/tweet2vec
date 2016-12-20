@@ -79,7 +79,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
                                  corpus=corpus, num_topics=num_topics, alpha=50, id2word=id2word, workers=n_workers,
                                  prefix=path.dirname(out_loc), optimize_interval=0, iterations=iterations,
                                  topic_threshold=0.0)
-        model = malletmodel2ldamodel(mallet_model, gamma_threshold=0.001, iterations=50)
 
 
 if __name__ == '__main__':
