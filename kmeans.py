@@ -3,6 +3,7 @@
 
 from __future__ import print_function, unicode_literals, division
 
+import sys
 import io
 import six
 import logging
@@ -13,6 +14,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
+from corpus.csv import CsvDirSentences
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +42,10 @@ def iter_sentences(sentences):
     batch_size=("Batch size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int),
-    no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "nm", bool),
+    fformat=("By default (ff=jsonl), JSONL format is used."
+             "Otherwise (ff='csv'), CSV format is used.", "option", "ff", str),
     no_lemmas=("Disable Lemmatization.", "flag", "nl", bool),
+    no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "nm", bool),
     max_features=("Maximum number of features (dimensions) to extract from text.", "option", "D", int),
     binary_tf=("Make tf term in tf-idf binary.", "flag", "b", bool),
     sublinear_tf=("Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).", "flag", "l", bool),
@@ -49,20 +53,29 @@ def iter_sentences(sentences):
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
-         job_size=1, max_docs=None, no_lemmas=False, max_features=10000, no_minibatch=False,
+         job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, no_minibatch=False,
          binary_tf=False, sublinear_tf=False, no_idf=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-    minibatch = not no_minibatch
     lemmatize = not no_lemmas
+    minibatch = not no_minibatch
     use_idf = not no_idf
     # Set training parameters.
     num_clusters = nr_clusters
     batchsize = batch_size
     iterations = nr_iter
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
-                                    max_docs=max_docs)
 
-    logger.info('KMeans')
+    ff = fformat.lower()
+    if (ff == 'jsonl'):
+        sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
+                                        max_docs=max_docs)
+    elif (ff == 'csv'):
+        sentences = utils.ClippedCorpus(CsvDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
+                                        max_docs=max_docs)
+    else:
+        print('Unsupported corpus format specified.')
+        sys.exit(1)
+
+    logger.info('TfidfVectorizer')
     vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
                                  decode_error='strict', strip_accents=None, lowercase=False,
                                  preprocessor=None, tokenizer=split_on_space, analyzer='word',
@@ -75,9 +88,11 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     X = vectorizer.fit_transform(iter_sentences(sentences))
 
     if minibatch:
+        logger.info('MiniBatchKMeans')
         km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
                              init_size=3*batchsize, batch_size=batchsize, verbose=verbose)
     else:
+        logger.info('KMeans')
         km = KMeans(n_clusters=num_clusters, init='k-means++', max_iter=iterations, n_init=1,
                     verbose=verbose)
 

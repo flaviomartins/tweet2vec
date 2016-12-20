@@ -3,6 +3,7 @@
 
 from __future__ import print_function, unicode_literals, division
 
+import sys
 import logging
 import plac
 from os import path
@@ -10,10 +11,11 @@ from os import path
 from multiprocessing import cpu_count
 
 from gensim.models import LdaModel, LdaMulticore
-from gensim.models.wrappers.ldamallet import LdaMallet, malletmodel2ldamodel
+from gensim.models.wrappers.ldamallet import LdaMallet
 from gensim.corpora import Dictionary
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
+from corpus.csv import CsvDirSentences
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
     mallet_path=("Path to mallet", "option", "-mallet_path", str),
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000, nr_passes=1, nr_iter=400,
-         job_size=1, max_docs=None, no_lemmas=False, mallet_path=None):
+         job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, mallet_path=None):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     # Set training parameters.
@@ -40,8 +42,17 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
     passes = nr_passes
     iterations = nr_iter
     eval_every = None  # Don't evaluate model perplexity, takes too much time.
-    sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
-                                    max_docs=max_docs)
+
+    ff = fformat.lower()
+    if (ff == 'jsonl'):
+        sentences = utils.ClippedCorpus(JsonlDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
+                                        max_docs=max_docs)
+    elif (ff == 'csv'):
+        sentences = utils.ClippedCorpus(CsvDirSentences(in_dir, n_workers, job_size, lemmatize=lemmatize),
+                                        max_docs=max_docs)
+    else:
+        print('Unsupported corpus format specified.')
+        sys.exit(1)
 
     logger.info('Dictionary')
     dictionary = Dictionary(sentences)

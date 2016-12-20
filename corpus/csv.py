@@ -67,7 +67,8 @@ def iter_files(directory, prefixes):
                 yield path.join(root, filename)
 
 
-def process_file(filepath, lemmatize):
+def process_file(args):
+    filepath, lemmatize = args
     if filepath.endswith('.gz'):
         csvfile = gzip.open(filepath, 'rb')
     else:
