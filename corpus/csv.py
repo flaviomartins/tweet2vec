@@ -4,7 +4,8 @@ import gzip
 import unicodecsv as csv
 
 import logging
-from multiprocessing import cpu_count
+import itertools
+import multiprocessing
 from os import path
 
 # fails to import scandir < 3.5
@@ -14,17 +15,18 @@ except ImportError:
     from scandir import scandir, walk
 import fnmatch
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
-from toolz import partition_all
-
+from gensim import utils
 from twokenize import twokenize
 from preprocessing import process_texts
 
 logger = logging.getLogger(__name__)
 
+# ignore articles shorter than ARTICLE_MIN_WORDS (after full preprocessing)
+ARTICLE_MIN_WORDS = 3
+
 
 class CsvDirSentences(object):
-    def __init__(self, directory, n_workers=cpu_count()-1, job_size=1, lemmatize=True, prefixes=None):
+    def __init__(self, directory, n_workers=multiprocessing.cpu_count()-1, job_size=1, lemmatize=True, prefixes=None):
         self.directory = directory
         self.n_workers = n_workers
         self.job_size = job_size
@@ -32,33 +34,30 @@ class CsvDirSentences(object):
         self.prefixes = prefixes
 
     def __iter__(self):
-        jobs = partition_all(self.job_size, iter_files(self.directory, self.prefixes))
-        with ProcessPoolExecutor(max_workers=self.n_workers) as executor:
-            futures = []
-            for j, job in enumerate(jobs):
-                futures.append(executor.submit(process_job, job, self.lemmatize))
-                if j % self.n_workers == 0:
-                    for future in as_completed(futures):
-                        try:
-                            results = future.result()
-                        except Exception as exc:
-                            logger.error('generated an exception: %s', exc)
-                        else:
-                            logger.debug('job has %d sentences', len(results))
-                            for result in results:
-                                if result is not None:
-                                    yield result
-                    futures = []
-            for future in as_completed(futures):
-                try:
-                    results = future.result()
-                except Exception as exc:
-                    logger.error('generated an exception: %s', exc)
-                else:
-                    logger.debug('job has %d sentences', len(results))
-                    for result in results:
-                        if result is not None:
-                            yield result
+        files = iter_files(self.directory, self.prefixes)
+        articles, articles_all = 0, 0
+        positions, positions_all = 0, 0
+        pool = multiprocessing.Pool(self.n_workers)
+        # process the corpus in smaller chunks of docs, because multiprocessing.Pool
+        # is dumb and would load the entire input into RAM at once...
+        for group in utils.chunkize(files, chunksize=self.job_size * self.n_workers, maxsize=1):
+            for texts in pool.imap(process_file, itertools.izip(group, itertools.repeat(self.lemmatize))):
+                for tokens in texts:
+                    articles_all += 1
+                    positions_all += len(tokens)
+                    # article redirects and short stubs are pruned here
+                    if len(tokens) < ARTICLE_MIN_WORDS:
+                        continue
+                    articles += 1
+                    positions += len(tokens)
+                    yield tokens
+        pool.terminate()
+
+        logger.info(
+            "finished iterating over corpus of %i documents with %i positions"
+            " (total %i documents, %i positions before pruning articles shorter than %i words)",
+            articles, positions, articles_all, positions_all, ARTICLE_MIN_WORDS)
+        self.length = articles  # cache corpus length
 
 
 def iter_files(directory, prefixes):
@@ -66,15 +65,6 @@ def iter_files(directory, prefixes):
         for filename in fnmatch.filter(filenames, '*.csv*'):
             if prefixes is None or filename.lower().split('.')[0] in prefixes:
                 yield path.join(root, filename)
-
-
-def process_job(job, lemmatize):
-    results = []
-    for filepath in job:
-        result = process_file(filepath, lemmatize)
-        if result is not None:
-            results += result
-    return results
 
 
 def process_file(filepath, lemmatize):
