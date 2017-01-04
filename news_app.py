@@ -1,6 +1,7 @@
 from __future__ import print_function, unicode_literals, division
 import logging
 from os import path
+from collections import OrderedDict
 
 from wsgiref import simple_server
 import falcon
@@ -8,6 +9,7 @@ import falcon
 import plac
 import json
 import yaml
+import requests
 from gensim.models import Word2Vec
 from twokenize import twokenize
 from preprocessing import process_texts
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 MAX_RESULTS_POOL = 1000
 ALLOWED_ORIGINS = ['*']
+SELECTION_URL = 'http://localhost:8080/taily'
 
 
 class CorsMiddleware(object):
@@ -33,16 +36,27 @@ class TagAutocompleteResource:
         self.models = models
 
     def tokens(self, q):
-        return process_texts([twokenize.tokenizeRawTweetText(q)])[0]
+        return twokenize.tokenizeRawTweetText(q)
 
     def most_similar(self, topic, tokens, limit):
         model = self.models[topic]
-        return model.most_similar(positive=tokens, topn=limit)
+        return model.most_similar_cosmul(positive=tokens, topn=limit)
 
     def suggestions(self, topic, q, limit):
+        params = {'q': q}
+        r = requests.get(SELECTION_URL, params=params)
+        if r.status_code == 200:
+            data = r.json(object_pairs_hook=OrderedDict)
+            if 'response' in data and 'collections' in data['response']:
+                cols = data['response']['collections']
+                for col, scores in cols.iteritems():
+                    topic = col
+                    logger.info('Topic: ' + col)
+                    break
         tokens = self.tokens(q)
-        word = tokens[-1]
-        context = tokens[:-1]
+        lemmas = process_texts([tokens])[0]
+        word = lemmas[-1]
+        context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
         most_similar = self.most_similar(topic, context, MAX_RESULTS_POOL)
         return most_similar[:limit]
