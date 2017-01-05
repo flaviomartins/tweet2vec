@@ -132,6 +132,8 @@ def get_query_vector(words, models, vector_size):
     # vocaublary, add its feature vector to the total
     for word in words:
         wv = get_global_word_vector(word, models, vector_size)
+        if np.isnan(np.sum(wv)):
+            break
         nwords = nwords + 1.
         featureVec = np.add(featureVec, wv)
     #
@@ -160,8 +162,6 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
 
     models = {}
     for topic, sources in config['selection']['topics'].items():
-        if topic == 'general':
-            continue
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         fullfn = path.join(in_dir, topic) + '.model'
         if path.exists(fullfn):
