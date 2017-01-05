@@ -40,7 +40,7 @@ class TagAutocompleteResource:
 
     def most_similar(self, topic, tokens, limit):
         model = self.models[topic]
-        return model.most_similar_cosmul(positive=tokens, topn=limit)
+        return model.most_similar_cosmul(positive=[tok for tok in tokens if tok in model], topn=limit)
 
     def suggestions(self, topic, q, limit):
         params = {'q': q}
@@ -110,7 +110,9 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         fullfn = path.join(in_dir, topic) + '.model'
         if path.exists(fullfn):
-            models[topic] = Word2Vec.load(fullfn)
+            model = Word2Vec.load(fullfn)
+            model.init_sims()
+            models[topic] = model
         else:
             logger.error('Missing model: %s', fullfn)
 
