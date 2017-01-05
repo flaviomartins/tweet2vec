@@ -1,7 +1,6 @@
 from __future__ import print_function, unicode_literals, division
 import logging
 from os import path
-from collections import OrderedDict
 
 from wsgiref import simple_server
 import falcon
@@ -9,7 +8,9 @@ import falcon
 import plac
 import json
 import yaml
-import requests
+import operator
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 from gensim.models import Word2Vec
 from twokenize import twokenize
 from preprocessing import process_texts
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 MAX_RESULTS_POOL = 1000
 ALLOWED_ORIGINS = ['*']
-SELECTION_URL = 'http://localhost:8080/taily'
+VECTOR_SIZE = 400
 
 
 class CorsMiddleware(object):
@@ -34,6 +35,13 @@ class TagAutocompleteResource:
 
     def __init__(self, models):
         self.models = models
+        self.models_vectors = self.init_model_vectors(models)
+
+    def init_model_vectors(self, models):
+        models_vectors = {}
+        for name, model in models.iteritems():
+            models_vectors[name] = np.mean(model.wv.syn0norm, axis=0)
+        return models_vectors
 
     def tokens(self, q):
         return twokenize.tokenizeRawTweetText(q)
@@ -43,21 +51,28 @@ class TagAutocompleteResource:
         return model.most_similar_cosmul(positive=[tok for tok in tokens if tok in model], topn=limit)
 
     def suggestions(self, topic, q, limit):
-        params = {'q': q}
-        r = requests.get(SELECTION_URL, params=params)
-        if r.status_code == 200:
-            data = r.json(object_pairs_hook=OrderedDict)
-            if 'response' in data and 'collections' in data['response']:
-                cols = data['response']['collections']
-                for col, scores in cols.iteritems():
-                    topic = col
-                    logger.info('Topic: ' + col)
-                    break
         tokens = self.tokens(q)
         lemmas = process_texts([tokens])[0]
         word = lemmas[-1]
         context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
+
+        qv = get_query_vector(lemmas, self.models, VECTOR_SIZE)
+
+        sims = {}
+        for name, mv in self.models_vectors.iteritems():
+            sim = cosine_similarity(qv.reshape(1, -1), mv.reshape(1, -1))
+            sims[name] = sim
+
+        sorted_sims = sorted(sims.items(), key=operator.itemgetter(1), reverse=True)
+        for name, sim in sorted_sims:
+            logger.info('Topic: %s: %f', name, sim)
+
+        # Selecting the topic
+        selected = sorted_sims[0]
+        topic = selected[0]
+        logger.info('Selected Topic: %s: %f', topic, selected[1])
+
         most_similar = self.most_similar(topic, context, MAX_RESULTS_POOL)
         return most_similar[:limit]
 
@@ -87,6 +102,44 @@ class TagAutocompleteResource:
         resp.status = falcon.HTTP_200
 
 
+def get_global_word_vector(word, models, vector_size):
+    # Pre-initialize an empty numpy array (for speed)
+    featureVec = np.zeros((vector_size,), dtype="float32")
+    #
+    nmodels = 0.
+    #
+    # Loop over each model
+    for name, model in models.iteritems():
+        if word in model.wv.vocab:
+            nmodels = nmodels + 1.
+            featureVec = np.add(featureVec, model[word])
+    #
+    # Divide the result by the number of words to get the average
+    featureVec = np.divide(featureVec, nmodels)
+    return featureVec
+
+
+def get_query_vector(words, models, vector_size):
+    # Function to average all of the word vectors in a given
+    # query
+    #
+    # Pre-initialize an empty numpy array (for speed)
+    featureVec = np.zeros((vector_size,), dtype="float32")
+    #
+    nwords = 0.
+    #
+    # Loop over each word in the review and, if it is in the model's
+    # vocaublary, add its feature vector to the total
+    for word in words:
+        wv = get_global_word_vector(word, models, vector_size)
+        nwords = nwords + 1.
+        featureVec = np.add(featureVec, wv)
+    #
+    # Divide the result by the number of words to get the average
+    featureVec = np.divide(featureVec, nwords)
+    return featureVec
+
+
 # Useful for debugging problems in your API; works with pdb.set_trace(). You
 # can also use Gunicorn to host your app. Gunicorn can be configured to
 # auto-restart workers when it detects a code change, and it also works
@@ -107,6 +160,8 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
 
     models = {}
     for topic, sources in config['selection']['topics'].items():
+        if topic == 'general':
+            continue
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         fullfn = path.join(in_dir, topic) + '.model'
         if path.exists(fullfn):
