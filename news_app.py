@@ -35,24 +35,36 @@ class TagAutocompleteResource:
 
     def __init__(self, models):
         self.models = models
-        self.models_vectors = self.init_model_vectors(models)
+        self.models_vectors = self.init_models_vectors(models)
+        self.models_lens, self.total_lens = self.init_models_lens(models)
 
-    def init_model_vectors(self, models):
+    def init_models_vectors(self, models):
         models_vectors = {}
         for name, model in models.iteritems():
             models_vectors[name] = np.mean(model.wv.syn0norm, axis=0)
         return models_vectors
+
+    def init_models_lens(self, models):
+        models_lens = {}
+        total_vocab_size = 0
+        for name, model in models.iteritems():
+            size = len(model.wv.vocab)
+            models_lens[name] = size
+            total_vocab_size += size
+        return models_lens, total_vocab_size
+
 
     def tokens(self, q):
         return twokenize.tokenizeRawTweetText(q)
 
     def most_similar(self, topic, tokens, limit):
         model = self.models[topic]
-        return model.most_similar_cosmul(positive=[tok for tok in tokens if tok in model], topn=limit)
+        words_in_model = [tok for tok in tokens if tok in model]
+        return model.most_similar_cosmul(positive=words_in_model, topn=limit)
 
     def suggestions(self, topic, q, limit):
         tokens = self.tokens(q)
-        lemmas = process_texts([tokens])[0]
+        lemmas = process_texts([tokens], lemmatize=False, stem=False)[0]
         word = lemmas[-1]
         context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
@@ -62,7 +74,7 @@ class TagAutocompleteResource:
         sims = {}
         for name, mv in self.models_vectors.iteritems():
             sim = cosine_similarity(qv.reshape(1, -1), mv.reshape(1, -1))
-            sims[name] = sim
+            sims[name] = self.total_lens/np.log(1 + self.models_lens[name]) * sim
 
         sorted_sims = sorted(sims.items(), key=operator.itemgetter(1), reverse=True)
         for name, sim in sorted_sims:

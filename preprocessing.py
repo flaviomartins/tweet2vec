@@ -33,7 +33,7 @@ Filtered = re.compile(
     ).decode('utf-8')), re.UNICODE)
 
 
-def process_texts(texts, lemmatize=True):
+def process_texts(texts, lemmatize=True, stem=True):
     """
     Function to process texts. Following are the steps we take:
 
@@ -65,6 +65,7 @@ def process_texts(texts, lemmatize=True):
                  ]
     else:
         texts = [[token.replace("'s", "") for token in line] for line in texts]
-        texts = [[stemmer.stem(token) for token in line] for line in texts]
+        if stem:
+            texts = [[stemmer.stem(token) for token in line] for line in texts]
         texts = [[token for token in line if 3 <= len(token)] for line in texts]
     return texts
