@@ -1,10 +1,13 @@
+from __future__ import division
+from builtins import object
+
 import numpy as np
 from scipy import special
 from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.preprocessing import normalize
 
 
-class KulkarniKLDEuclideanDistances:
+class KulkarniKLDEuclideanDistances(object):
 
     def __init__(self, km):
         self.km = km

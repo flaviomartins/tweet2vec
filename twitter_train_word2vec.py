@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function, unicode_literals, division
+from __future__ import print_function
 
 import bz2
 import io
@@ -17,9 +17,9 @@ from toolz import partition_all
 
 # fails to import scandir < 3.5
 try:
-    from os import scandir, walk
-except ImportError:
     from scandir import scandir, walk
+except ImportError:
+    from os import scandir, walk
 import fnmatch
 
 import plac

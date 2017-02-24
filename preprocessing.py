@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from builtins import str
+
 import re
 from twokenize import twokenize
 from nltk.corpus import stopwords
@@ -12,7 +14,7 @@ stemmer = PorterStemmer()
 
 # Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
 Filtered = re.compile(
-    unicode(twokenize.regex_or(
+    str(twokenize.regex_or(
         twokenize.Hearts,
         twokenize.url,
         twokenize.Email,
@@ -59,7 +61,7 @@ def process_texts(texts, lemmatize=True, stem=True):
     if lemmatize:
         texts = [[
                      re.split('/', token)[0] for token in utils.lemmatize(' '.join(line),
-                                                                          allowed_tags=re.compile('(NN)'),
+                                                                          allowed_tags=re.compile('(NN|VB|JJ|RB)'),
                                                                           min_length=3)
                      ] for line in texts
                  ]

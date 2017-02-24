@@ -1,5 +1,8 @@
-from __future__ import print_function, unicode_literals, division
+from __future__ import print_function
+from builtins import object
+
 import logging
+from collections import defaultdict
 from os import path
 
 from wsgiref import simple_server
@@ -31,7 +34,7 @@ class CorsMiddleware(object):
             response.set_header('Access-Control-Allow-Origin', origin)
 
 
-class TagAutocompleteResource:
+class TagAutocompleteResource(object):
 
     def __init__(self, models):
         self.models = models
@@ -40,14 +43,14 @@ class TagAutocompleteResource:
 
     def init_models_vectors(self, models):
         models_vectors = {}
-        for name, model in models.iteritems():
+        for name, model in models.items():
             models_vectors[name] = np.mean(model.wv.syn0norm, axis=0)
         return models_vectors
 
     def init_models_lens(self, models):
         models_lens = {}
         total_vocab_size = 0
-        for name, model in models.iteritems():
+        for name, model in models.items():
             size = len(model.wv.vocab)
             models_lens[name] = size
             total_vocab_size += size
@@ -62,9 +65,21 @@ class TagAutocompleteResource:
         words_in_model = [tok for tok in tokens if tok in model]
         return model.most_similar_cosmul(positive=words_in_model, topn=limit)
 
+    def most_similar2(self, topic, tokens, limit):
+        model = self.models[topic]
+        words_in_model = [tok for tok in tokens if tok in model]
+
+        cum = defaultdict(int)
+        for word in words_in_model:
+            most_similar = model.most_similar_cosmul(positive=word, topn=limit)
+            for sim in most_similar:
+                cum[sim[0]] += sim[1]
+        sorted_cum = sorted(list(cum.items()), key=operator.itemgetter(1), reverse=True)
+        return sorted_cum
+
     def suggestions(self, topic, q, limit):
         tokens = self.tokens(q)
-        lemmas = process_texts([tokens], lemmatize=False, stem=False)[0]
+        lemmas = process_texts([tokens], lemmatize=True)[0]
         word = lemmas[-1]
         context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
@@ -72,11 +87,11 @@ class TagAutocompleteResource:
         qv = get_query_vector(lemmas, self.models, VECTOR_SIZE)
 
         sims = {}
-        for name, mv in self.models_vectors.iteritems():
+        for name, mv in self.models_vectors.items():
             sim = cosine_similarity(qv.reshape(1, -1), mv.reshape(1, -1))
             sims[name] = self.total_lens/np.log(1 + self.models_lens[name]) * sim
 
-        sorted_sims = sorted(sims.items(), key=operator.itemgetter(1), reverse=True)
+        sorted_sims = sorted(list(sims.items()), key=operator.itemgetter(1), reverse=True)
         for name, sim in sorted_sims:
             logger.info('Topic: %s: %f', name, sim)
 
@@ -85,7 +100,7 @@ class TagAutocompleteResource:
         topic = selected[0]
         logger.info('Selected Topic: %s: %f', topic, selected[1])
 
-        most_similar = self.most_similar(topic, context, MAX_RESULTS_POOL)
+        most_similar = self.most_similar(topic, context, limit)
         return most_similar[:limit]
 
     def on_get(self, req, resp):
@@ -121,7 +136,7 @@ def get_global_word_vector(word, models, vector_size):
     nmodels = 0.
     #
     # Loop over each model
-    for name, model in models.iteritems():
+    for name, model in models.items():
         if word in model.wv.vocab:
             nmodels = nmodels + 1.
             featureVec = np.add(featureVec, model[word])
@@ -173,7 +188,7 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
         config = yaml.load(cf)
 
     models = {}
-    for topic, sources in config['selection']['topics'].items():
+    for topic, sources in list(config['selection']['topics'].items()):
         logger.info('Topic: %s -> %s', topic, ' '.join(sources))
         fullfn = path.join(in_dir, topic) + '.model'
         if path.exists(fullfn):

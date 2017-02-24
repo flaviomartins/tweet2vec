@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from __future__ import division
+from builtins import object
+
 from ldig import ldig
 import numpy as np
 from os import path
