@@ -124,7 +124,7 @@ def process_line(line):
         try:
             line = line.decode('utf-8')
         except UnicodeDecodeError as ude:
-            logger.warn('DECODE FAIL: %s', ude.message)
+            logger.warning('DECODE FAIL: %s', ude.message)
             return None
     try:
         data = ujson.loads(line)
@@ -133,7 +133,7 @@ def process_line(line):
             data = json.loads(line)
         except ValueError as ve:
             data = ''
-            logger.warn('DECODE FAIL: %s', ve.message)
+            logger.warning('DECODE FAIL: %s', ve.message)
     if 'text' in data:
         return twokenize.tokenizeRawTweetText(data['text'])
     else:

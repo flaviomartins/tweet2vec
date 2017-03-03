@@ -73,10 +73,14 @@ def iter_files(directory, prefixes):
 
 def process_file(args):
     filepath, lemmatize = args
-    if filepath.endswith('.gz'):
-        csvfile = gzip.open(filepath, 'rb')
-    else:
-        csvfile = open(filepath, 'rb')
+    try:
+        if filepath.endswith('.gz'):
+            csvfile = gzip.open(filepath, 'rb')
+        else:
+            csvfile = open(filepath, 'rb')
+    except IOError:
+        logger.warning('COULD NOT READ: %s', filepath)
+        return []
 
     # TODO: csv module has problems with null bytes?
     reader = csv.reader(csvfile, encoding='utf-8')
@@ -86,7 +90,7 @@ def process_file(args):
         for row in reader:
             result.append(twokenize.tokenizeRawTweetText(row[3]))
     except csv.Error as ce:
-        logger.warn('DECODE FAIL: %s %s', filepath, ce.message)
+        logger.warning('DECODE FAIL: %s %s', filepath, ce.message)
         pass
     csvfile.close()
     return process_texts(result, lemmatize=lemmatize)

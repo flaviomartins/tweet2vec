@@ -78,10 +78,14 @@ def iter_files(directory, prefixes):
 
 def process_file(args):
     filepath, lemmatize = args
-    if filepath.endswith('.gz'):
-        f = gzip.open(filepath)
-    else:
-        f = io.open(filepath, 'rt', encoding='utf-8')
+    try:
+        if filepath.endswith('.gz'):
+            f = gzip.open(filepath)
+        else:
+            f = io.open(filepath, 'rt', encoding='utf-8')
+    except IOError:
+        logger.warning('COULD NOT READ: %s', filepath)
+        return []
 
     result = []
     for line in f:
@@ -89,7 +93,7 @@ def process_file(args):
             try:
                 line = line.decode('utf-8')
             except UnicodeDecodeError as ude:
-                logger.warn('DECODE FAIL: %s %s', filepath, ude.message)
+                logger.warning('DECODE FAIL: %s %s', filepath, ude.message)
                 continue
         try:
             data = ujson.loads(line)
@@ -97,7 +101,7 @@ def process_file(args):
             try:
                 data = json.loads(line)
             except ValueError as ve:
-                logger.warn('DECODE FAIL: %s %s', filepath, ve.message)
+                logger.warning('DECODE FAIL: %s %s', filepath, ve.message)
                 continue
         if 'text' in data:
             result.append(twokenize.tokenizeRawTweetText(data['text']))
