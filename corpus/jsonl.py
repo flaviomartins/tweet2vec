@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+from builtins import zip
+from builtins import object
+
 import gzip
 import io
 import six
@@ -47,7 +50,7 @@ class JsonlDirSentences(object):
         # process the corpus in smaller chunks of docs, because multiprocessing.Pool
         # is dumb and would load the entire input into RAM at once...
         for group in utils.chunkize(files, chunksize=self.job_size * self.n_workers, maxsize=1):
-            for texts in pool.imap(process_file, itertools.izip(group, itertools.repeat(self.lemmatize))):
+            for texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
                 for tokens in texts:
                     articles_all += 1
                     positions_all += len(tokens)
