@@ -92,11 +92,11 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, nr_iter=100,
 
     with io.open(out_loc, 'wt', encoding='utf-8') as f:
         for i, component in enumerate(nmf.components_):
-            f.write('{:d}'.format(i))
+            f.write(u'{:d}'.format(i))
             order_centroids = component.argsort()[::-1]
             for ind in order_centroids[:20]:
-                f.write(' {}'.format(terms[ind]))
-            f.write('\n')
+                f.write(u' {}'.format(terms[ind]))
+            f.write(u'\n')
 
 
 if __name__ == '__main__':

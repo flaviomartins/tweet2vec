@@ -94,12 +94,12 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10,
 
     with io.open(out_loc, 'wt', encoding='utf-8') as f:
         for i in range(num_clusters):
-            f.write('{:d}'.format(i))
+            f.write(u'{:d}'.format(i))
             where = np.where(labels == i)
             for group in where:
                 for ind in group:
-                    f.write(' {}'.format(terms[ind]))
-            f.write('\n')
+                    f.write(u' {}'.format(terms[ind]))
+            f.write(u'\n')
 
 
 if __name__ == '__main__':
