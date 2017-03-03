@@ -25,9 +25,9 @@ import operator
 import re
 import six
 
-try:
+if six.PY3:
     import html
-except ImportError:
+else:
     from HTMLParser import HTMLParser
 
 
