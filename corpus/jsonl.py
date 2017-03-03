@@ -19,9 +19,9 @@ from os import path
 
 # fails to import scandir < 3.5
 try:
-    from os import scandir, walk
-except ImportError:
     from scandir import scandir, walk
+except ImportError:
+    from os import scandir, walk
 import fnmatch
 
 from gensim import utils
