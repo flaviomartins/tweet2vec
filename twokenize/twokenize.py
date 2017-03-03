@@ -23,17 +23,13 @@ from __future__ import unicode_literals
 
 import operator
 import re
-import sys
-
-try:
-    from html.parser import HTMLParser
-except ImportError:
-    from HTMLParser import HTMLParser
+import six
 
 try:
     import html
 except ImportError:
-    pass
+    from HTMLParser import HTMLParser
+
 
 def regex_or(*items):
     return '(?:' + '|'.join(items) + ')'
@@ -293,13 +289,8 @@ def tokenize(text):
 # We also first unescape &amp;'s, in case the text has been buggily double-escaped.
 def normalizeTextForTagger(text):
     text = text.replace("&amp;", "&")
-    #http://stackoverflow.com/questions/2360598
-    #/how-do-i-unescape-html-entities-in-a-string-in-python-3-1
-    if sys.version.info[0] > 2:
-        if sys.version.info[0] == 3 and sys.version.info[1] <= 3:
-            text = HTMLParser().unescape(text)
-        else:
-            text = html.unescape(text)
+    if six.PY3:
+        text = html.unescape(text)
     else:
         text = HTMLParser().unescape(text)
     return text
