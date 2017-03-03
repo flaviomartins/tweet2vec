@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 
+import io
 import sys
 import logging
 import plac
@@ -36,12 +37,12 @@ logger = logging.getLogger(__name__)
              "Otherwise (ff='csv'), CSV format is used.", "option", "ff", str),
     no_lemmas=("Disable Lemmatization.", "flag", "nl", bool)
 )
-def main(in_dir, out_dir, config, skipgram=0, negative=5, n_workers=cpu_count()-1, window=10, size=200, min_count=10,
+def main(in_dir, out_dir, config_file, skipgram=0, negative=5, n_workers=cpu_count()-1, window=10, size=200, min_count=10,
          nr_iter=2, job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
 
-    with open(config, 'r') as cf:
+    with io.open(config_file, 'rt', encoding='utf-8') as cf:
         config = yaml.load(cf)
 
     for topic, sources in config['selection']['topics'].items():

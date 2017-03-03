@@ -1,6 +1,7 @@
 from __future__ import print_function
 from builtins import object
 
+import io
 import logging
 from collections import defaultdict
 from os import path
@@ -184,7 +185,7 @@ def get_query_vector(words, models, vector_size):
 def main(in_dir, config_file, host='127.0.0.1', port=8001):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
-    with open(config_file, 'r') as cf:
+    with io.open(config_file, 'rt', encoding='utf-8') as cf:
         config = yaml.load(cf)
 
     models = {}
