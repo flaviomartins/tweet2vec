@@ -6,6 +6,8 @@ from builtins import object
 import gzip
 import io
 import six
+
+from json import JSONDecodeError
 try:
     import ujson
 except ImportError:
@@ -100,8 +102,8 @@ def process_file(args):
         except ValueError:
             try:
                 data = json.loads(line)
-            except ValueError as ve:
-                logger.warning('DECODE FAIL: %s %s', filepath, ve.message)
+            except JSONDecodeError as jde:
+                logger.warning('DECODE FAIL: %s %s', filepath, jde.msg)
                 continue
         if 'text' in data:
             result.append(twokenize.tokenizeRawTweetText(data['text']))

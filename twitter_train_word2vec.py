@@ -21,13 +21,15 @@ try:
 except ImportError:
     from os import scandir, walk
 import fnmatch
-
 import plac
+
+from json import JSONDecodeError
 try:
     import ujson
 except ImportError:
     import json as ujson
 import json
+
 from gensim.models import Word2Vec
 from gensim import utils
 from twokenize import twokenize
@@ -131,9 +133,9 @@ def process_line(line):
     except ValueError:
         try:
             data = json.loads(line)
-        except ValueError as ve:
+        except JSONDecodeError as jde:
             data = ''
-            logger.warning('DECODE FAIL: %s', ve.message)
+            logger.warning('DECODE FAIL: %s', jde.msg)
     if 'text' in data:
         return twokenize.tokenizeRawTweetText(data['text'])
     else:
