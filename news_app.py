@@ -39,24 +39,26 @@ class TagAutocompleteResource(object):
 
     def __init__(self, models):
         self.models = models
-        self.models_vectors = self.init_models_vectors(models)
+        self.models_vectors, self.models_names = self.init_models_vectors(models)
         self.models_lens, self.total_lens = self.init_models_lens(models)
 
     def init_models_vectors(self, models):
-        models_vectors = {}
-        for name, model in models.items():
-            models_vectors[name] = np.mean(model.wv.syn0norm, axis=0)
-        return models_vectors
+        mv = np.zeros((VECTOR_SIZE,), dtype="float32")
+        names = ["None"]
+        for name, model in self.models.items():
+            ave = np.mean(model.wv.syn0norm, axis=0)
+            mv = np.column_stack([mv, ave])
+            names.append(name)
+        return mv, np.array(names)
 
     def init_models_lens(self, models):
-        models_lens = {}
+        ml = np.zeros((1,))
         total_vocab_size = 0
         for name, model in models.items():
             size = len(model.wv.vocab)
-            models_lens[name] = size
+            ml = np.column_stack([ml, size])
             total_vocab_size += size
-        return models_lens, total_vocab_size
-
+        return ml, total_vocab_size
 
     def tokens(self, q):
         return twokenize.tokenizeRawTweetText(q)
@@ -87,19 +89,20 @@ class TagAutocompleteResource(object):
 
         qv = get_query_vector(lemmas, self.models, VECTOR_SIZE)
 
-        sims = {}
-        for name, mv in self.models_vectors.items():
-            sim = cosine_similarity(qv.reshape(1, -1), mv.reshape(1, -1))
-            sims[name] = self.total_lens/np.log(1 + self.models_lens[name]) * sim
+        sims = np.dot(qv, self.models_vectors)
+        # sims = self.total_lens / np.log(1 + self.models_lens)
+        ix = np.argsort(sims, axis=0)[::-1]
 
-        sorted_sims = sorted(list(sims.items()), key=operator.itemgetter(1), reverse=True)
-        for name, sim in sorted_sims:
-            logger.info('Topic: %s: %f', name, sim)
+        top_topics = self.models_names[ix]
+        top_scores = sims[ix]
+
+        for i in range(len(ix)):
+            logger.info('Topic: %s: %f', top_topics[i], top_scores[i])
 
         # Selecting the topic
-        selected = sorted_sims[0]
-        topic = selected[0]
-        logger.info('Selected Topic: %s: %f', topic, selected[1])
+        topic = top_topics[0]
+        score = top_scores[0]
+        logger.info('Selected Topic: %s: %f', topic, score)
 
         most_similar = self.most_similar(topic, context, limit)
         return most_similar[:limit]
