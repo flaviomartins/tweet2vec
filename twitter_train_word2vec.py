@@ -23,7 +23,6 @@ except ImportError:
 import fnmatch
 import plac
 
-from json import JSONDecodeError
 try:
     import ujson
 except ImportError:
@@ -133,9 +132,9 @@ def process_line(line):
     except ValueError:
         try:
             data = json.loads(line)
-        except JSONDecodeError as jde:
+        except ValueError as ve:
             data = ''
-            logger.warning('DECODE FAIL: %s', jde.msg)
+            logger.warning('DECODE FAIL: %s', ve)
     if 'text' in data:
         return twokenize.tokenizeRawTweetText(data['text'])
     else:
