@@ -112,7 +112,7 @@ class TagAutocompleteResource(object):
         logger.info('Selected Topic: %s: %f', topic, score)
 
         most_similar = self.most_similar(topic, context, limit)
-        return most_similar[:limit]
+        return topic, most_similar[:limit]
 
     def on_get(self, req, resp):
         topic = req.get_param('topic') or 'general'
@@ -120,8 +120,9 @@ class TagAutocompleteResource(object):
         limit = req.get_param_as_int('limit') or 10
 
         try:
-            suggestions = self.suggestions(topic, q, limit)
-            result = json.dumps([hit[0] for hit in suggestions])
+            topic, suggestions = self.suggestions(topic, q, limit)
+            data = {'topic': topic, 'suggestions': [hit for hit in suggestions]}
+            result = json.dumps(data)
         except Exception as ex:
             logger.error(ex)
 
