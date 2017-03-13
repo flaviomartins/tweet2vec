@@ -5,6 +5,7 @@ import io
 import logging
 from collections import defaultdict
 from os import path
+from timeit import default_timer as timer
 
 from wsgiref import simple_server
 import falcon
@@ -94,22 +95,30 @@ class TagAutocompleteResource(object):
         context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
 
+        start = timer()
+
         qv = get_query_vector(lemmas, self.models, VECTOR_SIZE).reshape(1, -1)
         mv = self.models_vectors
 
         sims = abs(cosine_similarity(qv, mv).ravel())
-        ix = np.argsort(sims)[::-1]
+        norms = np.divide(self.total_lens, np.log(1 + self.models_lens)).ravel()
+        dists = sims * norms
+
+        ix = np.argsort(dists)[::-1]
 
         top_topics = self.models_names[ix]
-        top_scores = sims[ix]
+        top_scores = dists[ix]
+
+        end = timer()
+        logger.info("time: %4.2fms", (end - start) * 10000)
 
         for i in range(len(ix)):
-            logger.info('Topic: %s: %f', top_topics[i], top_scores[i])
+            logger.info('%s: %f', top_topics[i], top_scores[i])
 
         # Selecting the topic
         topic = top_topics[0]
         score = top_scores[0]
-        logger.info('Selected Topic: %s: %f', topic, score)
+        logger.info('topic: %s: %f', topic, score)
 
         most_similar = self.most_similar(topic, context, limit)
         return topic, most_similar[:limit]
