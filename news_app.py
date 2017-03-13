@@ -14,6 +14,7 @@ import json
 import yaml
 import operator
 import numpy as np
+from numpy import array, abs, dot, sum as np_sum, zeros
 from sklearn.metrics.pairwise import cosine_similarity
 from gensim.models import Word2Vec
 from twokenize import twokenize
@@ -43,20 +44,20 @@ class TagAutocompleteResource(object):
         self.models_lens, self.total_lens = self.init_models_lens(models)
 
     def init_models_vectors(self, models):
-        mv = np.zeros((VECTOR_SIZE,), dtype="float32")
+        mv = zeros((VECTOR_SIZE,), dtype="float32")
         names = ["None"]
         for name, model in self.models.items():
-            ave = np.mean(model.wv.syn0norm, axis=0)
-            mv = np.column_stack([mv, ave])
+            ave = model.wv.syn0norm.mean(axis=0)
+            mv = np.vstack([mv, ave])
             names.append(name)
-        return mv, np.array(names)
+        return mv, array(names)
 
     def init_models_lens(self, models):
-        ml = np.zeros((1,))
+        ml = zeros((1,))
         total_vocab_size = 0
         for name, model in models.items():
             size = len(model.wv.vocab)
-            ml = np.column_stack([ml, size])
+            ml = np.vstack([ml, size])
             total_vocab_size += size
         return ml, total_vocab_size
 
@@ -87,11 +88,11 @@ class TagAutocompleteResource(object):
         context = lemmas
         logger.info('word: ' + word + ' context: ' + ' '.join(context))
 
-        qv = get_query_vector(lemmas, self.models, VECTOR_SIZE)
+        qv = get_query_vector(lemmas, self.models, VECTOR_SIZE).reshape(1, -1)
+        mv = self.models_vectors
 
-        sims = np.dot(qv, self.models_vectors)
-        # sims = self.total_lens / np.log(1 + self.models_lens)
-        ix = np.argsort(sims, axis=0)[::-1]
+        sims = abs(cosine_similarity(qv, mv).ravel())
+        ix = np.argsort(sims)[::-1]
 
         top_topics = self.models_names[ix]
         top_scores = sims[ix]
@@ -135,7 +136,7 @@ class TagAutocompleteResource(object):
 
 def get_global_word_vector(word, models, vector_size):
     # Pre-initialize an empty numpy array (for speed)
-    featureVec = np.zeros((vector_size,), dtype="float32")
+    featureVec = zeros((vector_size,), dtype="float32")
     #
     nmodels = 0.
     #
@@ -155,7 +156,7 @@ def get_query_vector(words, models, vector_size):
     # query
     #
     # Pre-initialize an empty numpy array (for speed)
-    featureVec = np.zeros((vector_size,), dtype="float32")
+    featureVec = zeros((vector_size,), dtype="float32")
     #
     nwords = 0.
     #
@@ -163,7 +164,7 @@ def get_query_vector(words, models, vector_size):
     # vocaublary, add its feature vector to the total
     for word in words:
         wv = get_global_word_vector(word, models, vector_size)
-        if np.isnan(np.sum(wv)):
+        if np.isnan(np_sum(wv)):
             break
         nwords = nwords + 1.
         featureVec = np.add(featureVec, wv)
