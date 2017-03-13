@@ -44,20 +44,26 @@ class TagAutocompleteResource(object):
         self.models_lens, self.total_lens = self.init_models_lens(models)
 
     def init_models_vectors(self, models):
-        mv = zeros((VECTOR_SIZE,), dtype="float32")
-        names = ["None"]
+        mv = None
+        names = []
         for name, model in self.models.items():
             ave = model.wv.syn0norm.mean(axis=0)
-            mv = np.vstack([mv, ave])
+            if mv is not None:
+                mv = np.vstack([mv, ave])
+            else:
+                mv = ave
             names.append(name)
         return mv, array(names)
 
     def init_models_lens(self, models):
-        ml = zeros((1,))
+        ml = None
         total_vocab_size = 0
         for name, model in models.items():
             size = len(model.wv.vocab)
-            ml = np.vstack([ml, size])
+            if ml is not None:
+                ml = np.vstack([ml, size])
+            else:
+                ml = size
             total_vocab_size += size
         return ml, total_vocab_size
 
