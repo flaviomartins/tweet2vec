@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 MAX_RESULTS_POOL = 1000
 ALLOWED_ORIGINS = ['*']
 VECTOR_SIZE = 400
-REPRESENTATION_LIMIT = 100
+REPRESENTATION_LIMIT = 10000
 
 
 class CorsMiddleware(object):
@@ -76,8 +76,11 @@ class TagAutocompleteResource(object):
 
     def most_similar(self, topic, tokens, limit):
         model = self.models[topic]
-        words_in_model = [tok for tok in tokens if tok in model]
-        return model.most_similar_cosmul(positive=words_in_model, topn=limit)
+        # words_in_model = [tok for tok in tokens if tok in model]
+        # model_similar = model.most_similar_cosmul(positive=words_in_model, topn=limit)
+        # words_in_global_model = [tok[0] for tok in model_similar if tok[0] in self.global_model]
+        words_in_global_model = [tok for tok in tokens if tok in self.global_model]
+        return self.global_model.most_similar_cosmul(positive=words_in_global_model, topn=limit)
 
     def most_similar2(self, topic, tokens, limit):
         model = self.models[topic]
