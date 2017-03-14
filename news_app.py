@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 MAX_RESULTS_POOL = 1000
 ALLOWED_ORIGINS = ['*']
 VECTOR_SIZE = 400
+REPRESENTATION_LIMIT = 100
 
 
 class CorsMiddleware(object):
@@ -39,16 +40,18 @@ class CorsMiddleware(object):
 
 class TagAutocompleteResource(object):
 
-    def __init__(self, models):
+    def __init__(self, global_model, models):
+        self.global_model = global_model
         self.models = models
-        self.models_vectors, self.models_names = self.init_models_vectors(models)
+        self.models_vectors, self.models_names = self.init_models_vectors(global_model, models)
         self.models_lens, self.total_lens = self.init_models_lens(models)
 
-    def init_models_vectors(self, models):
+    def init_models_vectors(self, global_model, models):
         mv = None
         names = []
         for name, model in self.models.items():
-            ave = model.wv.syn0norm.mean(axis=0)
+            # ave = model.wv.syn0norm.mean(axis=0)
+            ave = get_model_word_vector(global_model, model, VECTOR_SIZE)
             if mv is not None:
                 mv = np.vstack([mv, ave])
             else:
@@ -97,12 +100,12 @@ class TagAutocompleteResource(object):
 
         start = timer()
 
-        qv = get_query_vector(lemmas, self.models, VECTOR_SIZE).reshape(1, -1)
+        qv = get_query_vector(lemmas, self.global_model, self.models, VECTOR_SIZE).reshape(1, -1)
         mv = self.models_vectors
 
         sims = abs(cosine_similarity(qv, mv).ravel())
-        norms = np.divide(self.total_lens, np.log(1 + self.models_lens)).ravel()
-        dists = sims * norms
+        # norms = np.divide(self.total_lens, np.log(1 + self.models_lens)).ravel()
+        dists = sims  # * norms
 
         ix = np.argsort(dists)[::-1]
 
@@ -150,24 +153,32 @@ class TagAutocompleteResource(object):
         resp.status = falcon.HTTP_200
 
 
-def get_global_word_vector(word, models, vector_size):
+def get_model_word_vector(global_model, model, vector_size):
     # Pre-initialize an empty numpy array (for speed)
     featureVec = zeros((vector_size,), dtype="float32")
     #
-    nmodels = 0.
+    nwords = 0.
     #
-    # Loop over each model
-    for name, model in models.items():
-        if word in model.wv.vocab:
-            nmodels = nmodels + 1.
-            featureVec = np.add(featureVec, model[word])
+    # Loop over words
+    for word in model.wv.vocab:
+        if word in global_model.wv.vocab:
+            if nwords > REPRESENTATION_LIMIT:
+                break
+            nwords = nwords + 1.
+            featureVec = np.add(featureVec, global_model[word])
     #
     # Divide the result by the number of words to get the average
-    featureVec = np.divide(featureVec, nmodels)
+    featureVec = np.divide(featureVec, nwords)
     return featureVec
 
 
-def get_query_vector(words, models, vector_size):
+def get_global_word_vector(word, global_model, models, vector_size):
+    if word in global_model.wv.vocab:
+        return global_model[word]
+    return None
+
+
+def get_query_vector(words, global_model, models, vector_size):
     # Function to average all of the word vectors in a given
     # query
     #
@@ -179,7 +190,7 @@ def get_query_vector(words, models, vector_size):
     # Loop over each word in the review and, if it is in the model's
     # vocaublary, add its feature vector to the total
     for word in words:
-        wv = get_global_word_vector(word, models, vector_size)
+        wv = get_global_word_vector(word, global_model, models, vector_size)
         if np.isnan(np_sum(wv)):
             break
         nwords = nwords + 1.
@@ -197,16 +208,21 @@ def get_query_vector(words, models, vector_size):
 
 
 @plac.annotations(
-    in_dir=("Location of input model"),
+    in_global=("Location of global model"),
+    in_dir=("Location of input models"),
     config_file=("YAML config file"),
     host=("Bind to host", "option", "b", str),
     port=("Bind to port", "option", "p", int),
 )
-def main(in_dir, config_file, host='127.0.0.1', port=8001):
+def main(in_global, in_dir, config_file, host='127.0.0.1', port=8001):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
 
     with io.open(config_file, 'rt', encoding='utf-8') as cf:
         config = yaml.load(cf)
+
+    if path.exists(in_global):
+        global_model = Word2Vec.load(in_global)
+        global_model.init_sims()
 
     models = {}
     for topic, sources in list(config['selection']['topics'].items()):
@@ -224,7 +240,7 @@ def main(in_dir, config_file, host='127.0.0.1', port=8001):
         CorsMiddleware()
     ])
 
-    tag_autocomplete = TagAutocompleteResource(models)
+    tag_autocomplete = TagAutocompleteResource(global_model, models)
     app.add_route('/', tag_autocomplete)
 
     httpd = simple_server.make_server(host, port, app)
