@@ -17,7 +17,7 @@ from gensim import utils
 from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
 
-from jsd import jensen_shannon_divergence
+from jsd import pairwise_jsd
 from kld import KulkarniKLDEuclideanDistances
 
 logger = logging.getLogger(__name__)
@@ -112,7 +112,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         # monkey patch (ensure jsd function is used)
-        k_means.__globals__['euclidean_distances'] = jsd_euclidean_distances
+        k_means.__globals__['euclidean_distances'] = jsd_distances_euclidean_distances
     elif cosine:
         logger.info('Using cosine distances')
         # we can use cosine_similarity because vectors are 'l2' normalized in TfidfVectorizer
@@ -135,6 +135,10 @@ def cosine_distances_euclidean_distances(X, Y=None, Y_norm_squared=None, squared
                                          X_norm_squared=None):
     return cosine_distances(X, Y)
 
+
+def jsd_distances_euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False,
+                                         X_norm_squared=None):
+    return pairwise_jsd(X, Y)
 
 if __name__ == '__main__':
     plac.call(main)
