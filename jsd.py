@@ -27,8 +27,6 @@ def jensen_shannon_divergence(X, Y):
     j : float
     See Also
     --------
-    jsd_matrix : function
-        Computes all pair-wise distances for a set of measurements
     entropy : function
         Computes entropy and K-L divergence
     """

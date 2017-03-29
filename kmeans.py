@@ -107,7 +107,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     if kld:
         logger.info("Using Kulkarni's Negative Kullback-Liebler metric")
         # monkey patch (ensure kld function is used)
-        kldmetric = KulkarniKLDEuclideanDistances(km)
+        kldmetric = KulkarniKLDEuclideanDistances()
         k_means.__globals__['euclidean_distances'] = kldmetric
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')

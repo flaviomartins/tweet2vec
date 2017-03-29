@@ -2,22 +2,27 @@ from __future__ import division
 from builtins import object
 
 import numpy as np
-from scipy import special
-from sklearn.metrics.pairwise import check_pairwise_arrays
+from scipy import special, stats
+from scipy.sparse import issparse
+from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
 from sklearn.preprocessing import normalize
 
 
 class KulkarniKLDEuclideanDistances(object):
 
-    def __init__(self, km):
-        self.km = km
+    def __init__(self):
+        pass
 
     def __call__(self, X, Y=None, Y_norm_squared=None, squared=False,
                  X_norm_squared=None):
-        return kulkarni_kld_metric(X, Y, self.km)
+        return pairwise_kld(X, Y)
 
 
-def kulkarni_kld_metric(X, Y, km):
+def pairwise_kld(X, Y):
+    return pairwise_distances(X, Y, metric=kld_metric)
+
+
+def kld_metric(X, Y):
     """Compute Kulkarni's Negative Kullback-Liebler metric
     Parameters
     ----------
@@ -30,12 +35,9 @@ def kulkarni_kld_metric(X, Y, km):
     j : float
     See Also
     --------
-    kld_matrix : function
-        Computes all pair-wise distances for a set of measurements
     entropy : function
         Computes entropy and K-L divergence
     """
-
     X, Y = check_pairwise_arrays(X, Y)
 
     X_normalized = normalize(X, norm='l1', copy=True)
@@ -44,8 +46,20 @@ def kulkarni_kld_metric(X, Y, km):
     else:
         Y_normalized = normalize(Y, norm='l1', copy=True)
 
-    m = (X_normalized + Y_normalized)
-    m /= 2.
-    m = np.where(m, m, 1.)
+    if issparse(X_normalized):
+        X_normalized = X_normalized.todense()
+    if issparse(Y_normalized):
+        Y_normalized = Y_normalized.todense()
 
-    return 0.5*np.sum(special.xlogy(X_normalized, X_normalized/m) + special.xlogy(Y_normalized, Y_normalized/m), axis=1)
+    xlogx = special.xlogy(X_normalized, Y_normalized)
+    ylogy = special.xlogy(Y_normalized, X_normalized)
+
+    distances = np.sum(xlogx + ylogy, axis=1)
+    np.maximum(distances, 0, out=distances)
+
+    if X is Y:
+        # Ensure that distances between vectors and themselves are set to 0.0.
+        # This may not be the case due to floating point rounding errors.
+        distances.flat[::distances.shape[0] + 1] = 0.0
+
+    return distances
