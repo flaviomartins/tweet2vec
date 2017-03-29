@@ -9,9 +9,11 @@ import six
 import logging
 import plac
 
+from pkg_resources import parse_version
 from multiprocessing import cpu_count
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import NMF
+import sklearn
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
@@ -48,11 +50,12 @@ def iter_sentences(sentences):
     binary_tf=("Make tf term in tf-idf binary.", "flag", "b", bool),
     sublinear_tf=("Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).", "flag", "l", bool),
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
+    kld=("Use generalized Kullback-Leibler divergence (equivalent to PLSI).", "flag", "kld", bool),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, nr_iter=100,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000,
-         binary_tf=False, sublinear_tf=False, no_idf=False, verbose=False):
+         binary_tf=False, sublinear_tf=False, no_idf=False, kld=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     use_idf = not no_idf
@@ -81,12 +84,18 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, nr_iter=100,
                                  norm='l2', use_idf=use_idf, smooth_idf=True,
                                  sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
 
-    X = vectorizer.fit_transform(iter_sentences(sentences))
+    tfidf = vectorizer.fit_transform(iter_sentences(sentences))
 
-    logger.info('NMF')
-    nmf = NMF(n_components=num_clusters, max_iter=iterations, random_state=1, verbose=verbose)
+    if kld and parse_version(sklearn.__version__) >= parse_version('0.19.0'):
+        logger.info('NMF-KL')
+        nmf = NMF(n_components=num_clusters, max_iter=iterations, random_state=1, verbose=verbose,
+                  beta_loss='kullback-leibler', solver='mu', alpha=.1, l1_ratio=.5)
+    else:
+        logger.info('NMF')
+        nmf = NMF(n_components=num_clusters, max_iter=iterations, random_state=1, verbose=verbose,
+                  alpha=.1, l1_ratio=.5)
 
-    nmf.fit(X)
+    nmf.fit(tfidf)
 
     terms = vectorizer.get_feature_names()
 
