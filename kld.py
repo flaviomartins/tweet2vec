@@ -2,8 +2,9 @@ from __future__ import division
 from builtins import object
 
 import numpy as np
-from scipy import special, stats
 from scipy.sparse import issparse
+from scipy.special import rel_entr, xlogy
+from scipy.stats import entropy
 from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
 from sklearn.preprocessing import normalize
 
@@ -51,8 +52,8 @@ def kld_metric(X, Y):
     if issparse(Y_normalized):
         Y_normalized = Y_normalized.todense()
 
-    xlogx = special.xlogy(X_normalized, Y_normalized)
-    ylogy = special.xlogy(Y_normalized, X_normalized)
+    xlogx = xlogy(X_normalized, Y_normalized)
+    ylogy = xlogy(Y_normalized, X_normalized)
 
     distances = np.sum(xlogx + ylogy, axis=1)
     np.maximum(distances, 0, out=distances)

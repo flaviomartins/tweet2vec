@@ -3,7 +3,8 @@ from builtins import range
 
 import numpy as np
 from numpy.testing import assert_, assert_almost_equal, assert_array_almost_equal
-from scipy import special, stats
+from scipy.special import xlogy
+from scipy.stats import entropy
 from scipy.sparse import issparse
 from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
 from sklearn.preprocessing import normalize
@@ -49,12 +50,12 @@ def jensen_shannon_divergence(X, Y):
     divx = X_normalized/m
     if issparse(X_normalized):
         X_normalized = X_normalized.todense()
-    xlogx = special.xlogy(X_normalized, divx)
+    xlogx = xlogy(X_normalized, divx)
 
     divy = Y_normalized/m
     if issparse(Y_normalized):
         Y_normalized = Y_normalized.todense()
-    ylogy = special.xlogy(Y_normalized, divy)
+    ylogy = xlogy(Y_normalized, divy)
 
     distances = 0.5 * np.sum(xlogx + ylogy, axis=1)
     np.maximum(distances, 0, out=distances)
@@ -87,7 +88,7 @@ def test_jensen_shannon_divergence():
     a = np.array([1, 0, 0, 0], float)
     b = np.array([1, 1, 1, 1], float)
     m = a/a.sum() + b/b.sum()
-    expected = (stats.entropy(a, m) + stats.entropy(b, m)) / 2
+    expected = (entropy(a, m) + entropy(b, m)) / 2
     calculated = jensen_shannon_divergence(a, b)
     assert_almost_equal(calculated, expected)
 
