@@ -86,7 +86,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, nr_iter=100,
 
     tfidf = vectorizer.fit_transform(iter_sentences(sentences))
 
-    if kld and parse_version(sklearn.__version__) >= parse_version('0.19.0'):
+    if kld and parse_version(sklearn.__version__) > parse_version('0.18'):
         logger.info('NMF-KL')
         nmf = NMF(n_components=num_clusters, max_iter=iterations, random_state=1, verbose=verbose,
                   beta_loss='kullback-leibler', solver='mu', alpha=.1, l1_ratio=.5)
