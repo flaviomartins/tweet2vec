@@ -20,7 +20,17 @@ class KulkarniKLDEuclideanDistances(object):
 
 
 def pairwise_kld(X, Y):
-    return pairwise_distances(X, Y, metric=kld_metric)
+    if issparse(X):
+        X_dense = X.todense()
+    else:
+        X_dense = X
+
+    if issparse(Y):
+        Y_dense = Y.todense()
+    else:
+        Y_dense = Y
+
+    return pairwise_distances(X_dense, Y_dense, metric=kld_metric)
 
 
 def kld_metric(X, Y):
@@ -39,7 +49,7 @@ def kld_metric(X, Y):
     entropy : function
         Computes entropy and K-L divergence
     """
-    X, Y = check_pairwise_arrays(X, Y)
+    X, Y = check_pairwise_arrays(np.atleast_2d(X), np.atleast_2d(Y))
 
     X_normalized = normalize(X, norm='l1', copy=True)
     if X is Y:
