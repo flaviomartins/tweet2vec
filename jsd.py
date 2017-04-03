@@ -11,7 +11,17 @@ from sklearn.preprocessing import normalize
 
 
 def pairwise_jsd(X, Y):
-    return pairwise_distances(X, Y, metric=jensen_shannon_divergence)
+    if issparse(X):
+        X_dense = X.todense()
+    else:
+        X_dense = X
+
+    if issparse(Y):
+        Y_dense = Y.todense()
+    else:
+        Y_dense = Y
+
+    return pairwise_distances(X_dense, Y_dense, metric=jensen_shannon_divergence)
 
 
 # adapted from gh:luispedro/scipy
@@ -31,7 +41,7 @@ def jensen_shannon_divergence(X, Y):
     entropy : function
         Computes entropy and K-L divergence
     """
-    X, Y = check_pairwise_arrays(X, Y)
+    X, Y = check_pairwise_arrays(np.atleast_2d(X), np.atleast_2d(Y))
 
     X_normalized = normalize(X, norm='l1', copy=True)
 

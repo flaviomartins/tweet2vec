@@ -10,14 +10,14 @@ import logging
 import plac
 
 from multiprocessing import cpu_count
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.metrics.pairwise import cosine_distances
 from sklearn.cluster import KMeans, MiniBatchKMeans
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
 
-from jsd import pairwise_jsd
+from jsd import pairwise_jsd, jensen_shannon_divergence
 from kld import KulkarniKLDEuclideanDistances
 
 logger = logging.getLogger(__name__)
@@ -82,17 +82,14 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         print('Unsupported corpus format specified.')
         sys.exit(1)
 
-    logger.info('TfidfVectorizer')
-    vectorizer = TfidfVectorizer(input='content', encoding='utf-8',
+    logger.info('CountVectorizer')
+    count_vect = CountVectorizer(input='content', encoding='utf-8',
                                  decode_error='strict', strip_accents=None, lowercase=False,
                                  preprocessor=None, tokenizer=split_on_space, analyzer='word',
                                  stop_words=None, token_pattern=None,
                                  max_df=0.5, min_df=5,
-                                 max_features=max_features, vocabulary=None, binary=binary_tf,  # binary_tf -> tf=1 cap
-                                 norm='l2', use_idf=use_idf, smooth_idf=True,
-                                 sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
-
-    X = vectorizer.fit_transform(iter_sentences(sentences))
+                                 max_features=max_features, vocabulary=None, binary=binary_tf)
+    X_train_counts = count_vect.fit_transform(iter_sentences(sentences))
 
     if minibatch:
         logger.info('MiniBatchKMeans')
@@ -109,19 +106,31 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         # monkey patch (ensure kld function is used)
         kldmetric = KulkarniKLDEuclideanDistances()
         k_means.__globals__['euclidean_distances'] = kldmetric
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=True,
+                                          sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
+        X_train_tf = tf_transformer.fit_transform(X_train_counts)
+        km.fit(X_train_tf)
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         # monkey patch (ensure jsd function is used)
         k_means.__globals__['euclidean_distances'] = jsd_distances_euclidean_distances
+        logger.info('TfidfTransformer')
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
+                                          sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
+        X_train_tf = tf_transformer.fit_transform(X_train_counts)
+        km.fit(X_train_tf)
     elif cosine:
         logger.info('Using cosine distances')
         # we can use cosine_similarity because vectors are 'l2' normalized in TfidfVectorizer
         k_means.__globals__['euclidean_distances'] = cosine_distances_euclidean_distances
-
-    km.fit(X)
+        logger.info('TfidfTransformer')
+        tf_transformer = TfidfTransformer(norm='l2', use_idf=use_idf, smooth_idf=True,
+                                          sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
+        X_train_tf = tf_transformer.fit_transform(X_train_counts)
+        km.fit(X_train_tf)
 
     order_centroids = km.cluster_centers_.argsort()[:, ::-1]
-    terms = vectorizer.get_feature_names()
+    terms = count_vect.get_feature_names()
 
     with io.open(out_loc, 'wt', encoding='utf-8') as f:
         for i in range(num_clusters):
