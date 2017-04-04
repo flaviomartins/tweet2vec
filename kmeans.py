@@ -93,11 +93,11 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     if minibatch:
         logger.info('MiniBatchKMeans')
-        km = MiniBatchKMeans(n_clusters=num_clusters, init='k-means++', n_init=1,
+        km = MiniBatchKMeans(n_clusters=num_clusters, init='random', n_init=5,
                              init_size=3*batchsize, batch_size=batchsize, verbose=verbose)
     else:
         logger.info('KMeans')
-        km = KMeans(n_clusters=num_clusters, init='k-means++', max_iter=iterations, n_init=1,
+        km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=5,
                     algorithm='full', verbose=verbose)
 
     from sklearn.cluster.k_means_ import k_means
@@ -106,7 +106,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         # monkey patch (ensure kld function is used)
         kldmetric = KulkarniKLDEuclideanDistances()
         k_means.__globals__['euclidean_distances'] = kldmetric
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=True,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         km.fit(X_train_tf)

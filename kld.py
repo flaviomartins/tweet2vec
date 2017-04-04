@@ -4,7 +4,6 @@ from builtins import object
 import numpy as np
 from scipy.sparse import issparse
 from scipy.special import rel_entr, xlogy
-from scipy.stats import entropy
 from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
 from sklearn.preprocessing import normalize
 
@@ -20,12 +19,12 @@ class KulkarniKLDEuclideanDistances(object):
 
 
 def pairwise_kld(X, Y):
+    X_dense = X
     if issparse(X):
         X_dense = X.todense()
-    else:
-        X_dense = X
-
-    if issparse(Y):
+    if X is Y:
+        Y_dense = X_dense
+    elif issparse(Y):
         Y_dense = Y.todense()
     else:
         Y_dense = Y
@@ -57,15 +56,10 @@ def kld_metric(X, Y):
     else:
         Y_normalized = normalize(Y, norm='l1', copy=True)
 
-    if issparse(X_normalized):
-        X_normalized = X_normalized.todense()
-    if issparse(Y_normalized):
-        Y_normalized = Y_normalized.todense()
+    XY_rel_entr = rel_entr(X_normalized, Y_normalized)
+    YX_rel_entr = rel_entr(Y_normalized, X_normalized)
 
-    xlogx = xlogy(X_normalized, Y_normalized)
-    ylogy = xlogy(Y_normalized, X_normalized)
-
-    distances = np.sum(xlogx + ylogy, axis=1)
+    distances = np.sum(XY_rel_entr + YX_rel_entr, axis=1)
     np.maximum(distances, 0, out=distances)
 
     if X is Y:

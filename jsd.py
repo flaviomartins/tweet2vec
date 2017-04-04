@@ -3,7 +3,7 @@ from builtins import range
 
 import numpy as np
 from numpy.testing import assert_, assert_almost_equal, assert_array_almost_equal
-from scipy.special import xlogy
+from scipy.special import rel_entr
 from scipy.stats import entropy
 from scipy.sparse import issparse
 from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
@@ -11,12 +11,12 @@ from sklearn.preprocessing import normalize
 
 
 def pairwise_jsd(X, Y):
+    X_dense = X
     if issparse(X):
         X_dense = X.todense()
-    else:
-        X_dense = X
-
-    if issparse(Y):
+    if X is Y:
+        Y_dense = X_dense
+    elif issparse(Y):
         Y_dense = Y.todense()
     else:
         Y_dense = Y
@@ -52,22 +52,12 @@ def jensen_shannon_divergence(X, Y):
 
     m = (X_normalized + Y_normalized)
     m /= 2.
-    try:
-        m = np.where(m, m, 1.)
-    except ValueError:
-        pass
+    m = np.where(m, m, 1.)
 
-    divx = X_normalized/m
-    if issparse(X_normalized):
-        X_normalized = X_normalized.todense()
-    xlogx = xlogy(X_normalized, divx)
+    XXm_rel_entr = rel_entr(X_normalized, m)
+    YYm_rel_entr = rel_entr(Y_normalized, m)
 
-    divy = Y_normalized/m
-    if issparse(Y_normalized):
-        Y_normalized = Y_normalized.todense()
-    ylogy = xlogy(Y_normalized, divy)
-
-    distances = 0.5 * np.sum(xlogx + ylogy, axis=1)
+    distances = 0.5 * np.sum(XXm_rel_entr + YYm_rel_entr, axis=1)
     np.maximum(distances, 0, out=distances)
 
     if X is Y:
