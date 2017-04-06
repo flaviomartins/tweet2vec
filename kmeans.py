@@ -11,14 +11,15 @@ import plac
 
 from multiprocessing import cpu_count
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from sklearn.metrics.pairwise import cosine_distances
-from sklearn.cluster import KMeans, MiniBatchKMeans
+from cluster.kmeans import randomsample, Kmeans
 from gensim import utils
 from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
 
-from jsd import pairwise_jsd, jensen_shannon_divergence
-from kld import KulkarniKLDEuclideanDistances
+import numpy as np
+from sklearn.metrics.pairwise import cosine_distances
+from jsd import jensen_shannon_divergence
+from kld import KulkarniKLDEuclideanDistances, kld_metric
 
 logger = logging.getLogger(__name__)
 
@@ -91,45 +92,41 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                                  max_features=max_features, vocabulary=None, binary=binary_tf)
     X_train_counts = count_vect.fit_transform(iter_sentences(sentences))
 
-    if minibatch:
-        logger.info('MiniBatchKMeans')
-        km = MiniBatchKMeans(n_clusters=num_clusters, init='random', n_init=5,
-                             init_size=3*batchsize, batch_size=batchsize, verbose=verbose)
-    else:
-        logger.info('KMeans')
-        km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=5,
-                    algorithm='full', verbose=verbose)
-
-    from sklearn.cluster.k_means_ import k_means
     if kld:
         logger.info("Using Kulkarni's Negative Kullback-Liebler metric")
-        # monkey patch (ensure kld function is used)
+        logger.info('TfidfTransformer')
         kldmetric = KulkarniKLDEuclideanDistances()
-        k_means.__globals__['euclidean_distances'] = kldmetric
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        km.fit(X_train_tf)
+        metric = kldmetric
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
-        # monkey patch (ensure jsd function is used)
-        k_means.__globals__['euclidean_distances'] = jsd_distances_euclidean_distances
         logger.info('TfidfTransformer')
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        km.fit(X_train_tf)
+        metric = jensen_shannon_divergence
     elif cosine:
         logger.info('Using cosine distances')
-        # we can use cosine_similarity because vectors are 'l2' normalized in TfidfVectorizer
-        k_means.__globals__['euclidean_distances'] = cosine_distances_euclidean_distances
+        logger.info('TfidfTransformer')
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
+                                          sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
+        X_train_tf = tf_transformer.fit_transform(X_train_counts)
+        metric = "cosine"
+    else:
+        logger.info('Using euclidean distances')
         logger.info('TfidfTransformer')
         tf_transformer = TfidfTransformer(norm='l2', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        km.fit(X_train_tf)
+        metric = "euclidean"
 
-    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
+    randomcentres = randomsample(X_train_tf, num_clusters)
+    km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+    centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
+
+    order_centroids = np.array(centres).argsort()[:, ::-1]
     terms = count_vect.get_feature_names()
 
     with io.open(out_loc, 'wt', encoding='utf-8') as f:
@@ -139,15 +136,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                 f.write(u' {}'.format(terms[ind]))
             f.write(u'\n')
 
-
-def cosine_distances_euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False,
-                                         X_norm_squared=None):
-    return cosine_distances(X, Y)
-
-
-def jsd_distances_euclidean_distances(X, Y=None, Y_norm_squared=None, squared=False,
-                                         X_norm_squared=None):
-    return pairwise_jsd(X, Y)
 
 if __name__ == '__main__':
     plac.call(main)
