@@ -121,9 +121,11 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = "euclidean"
 
-    # randomcentres = randomsample(X_train_tf, num_clusters)
-    # km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
-    km = Kmeans(X_train_tf, k=num_clusters, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+    if no_minibatch:
+        randomcentres = randomsample(X_train_tf, num_clusters)
+        km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+    else:
+        km = Kmeans(X_train_tf, k=num_clusters, delta=.001, maxiter=iterations, metric=metric, verbose=2)
     centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
 
     order_centroids = np.array(centres).argsort()[:, ::-1]
