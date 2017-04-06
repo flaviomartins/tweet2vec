@@ -17,7 +17,6 @@ from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
 
 import numpy as np
-from sklearn.metrics.pairwise import cosine_distances
 from jsd import jensen_shannon_divergence
 from kld import KulkarniKLDEuclideanDistances, kld_metric
 
@@ -99,7 +98,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        metric = kldmetric
+        metric = kld_metric
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         logger.info('TfidfTransformer')
@@ -110,10 +109,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     elif cosine:
         logger.info('Using cosine distances')
         logger.info('TfidfTransformer')
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        metric = "cosine"
+        metric = 'cosine'
     else:
         logger.info('Using euclidean distances')
         logger.info('TfidfTransformer')
@@ -122,8 +121,9 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = "euclidean"
 
-    randomcentres = randomsample(X_train_tf, num_clusters)
-    km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+    # randomcentres = randomsample(X_train_tf, num_clusters)
+    # km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+    km = Kmeans(X_train_tf, k=num_clusters, delta=.001, maxiter=iterations, metric=metric, verbose=2)
     centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
 
     order_centroids = np.array(centres).argsort()[:, ::-1]

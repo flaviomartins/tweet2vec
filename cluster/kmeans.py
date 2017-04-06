@@ -8,6 +8,7 @@ import numpy as np
 from scipy.spatial.distance import cdist  # $scipy/spatial/distance.py
 # http://docs.scipy.org/doc/scipy/reference/spatial.html
 from scipy.sparse import issparse  # $scipy/sparse/csr.py
+from sklearn.metrics.pairwise import cosine_distances
 
 __date__ = "2011-11-17 Nov denis"
 # X sparse, any cdist metric: real app ?
@@ -49,7 +50,10 @@ def kmeans( X, centres, delta=.001, maxiter=10, metric="euclidean", p=2, verbose
     allx = np.arange(N)
     prevdist = 0
     for jiter in range( 1, maxiter+1 ):
-        D = cdist_sparse( X, centres, metric=metric, p=p )  # |X| x |centres|
+        if metric in ['cosine', 'cos']:
+            D = cosine_distances( X, centres )
+        else:
+            D = cdist_sparse( X, centres, metric=metric, p=p )  # |X| x |centres|
         xtoc = D.argmin(axis=1)  # X -> nearest centre
         distances = D[allx,xtoc]
         avdist = distances.mean()  # median ?
