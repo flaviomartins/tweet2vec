@@ -4,10 +4,8 @@ from builtins import range
 import numpy as np
 from numpy.testing import assert_, assert_almost_equal, assert_array_almost_equal
 from scipy.spatial.distance import cdist
-from scipy.special import rel_entr
-from scipy.special import xlogy
+from scipy.special import rel_entr, xlogy
 from scipy.stats import entropy
-from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.preprocessing import normalize
 
 

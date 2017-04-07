@@ -4,8 +4,6 @@ import numpy as np
 from scipy.sparse import issparse
 from scipy.spatial.distance import _copy_array_if_base_present
 from scipy.special import rel_entr, xlogy
-from sklearn.metrics.pairwise import check_pairwise_arrays
-from sklearn.preprocessing import normalize
 
 
 def cdist_kld_sparse(X, Y, p_B, **kwargs):
@@ -85,31 +83,10 @@ def kld_metric(X, Y, p_B, a=0.1, **kwargs):
     entropy : function
         Computes entropy and K-L divergence
     """
-    X, Y = check_pairwise_arrays(np.atleast_2d(X), np.atleast_2d(Y))
-
-    X_normalized = normalize(X, norm='l1', copy=True)
-    if X is Y:
-        Y_normalized = X_normalized
-    else:
-        Y_normalized = normalize(Y, norm='l1', copy=True)
-
+    X, Y = np.atleast_2d(X), np.atleast_2d(Y)
     a_p_B = a * p_B
-    p_D = (1 - a) * X_normalized + a_p_B
-    p_C = Y_normalized
-
+    p_D = (1 - a) * X + a_p_B
+    p_C = Y
     m = (p_C + p_D)
     m /= 2.
-    m = np.where(m, m, 1.)
-
-    XXm_rel_entr = rel_entr(p_C, m)
-    YYm_rel_entr = rel_entr(p_D, m)
-
-    distances = 0.5 * np.sum(XXm_rel_entr + YYm_rel_entr, axis=1)
-    np.maximum(distances, 0, out=distances)
-
-    if X is Y:
-        # Ensure that distances between vectors and themselves are set to 0.0.
-        # This may not be the case due to floating point rounding errors.
-        distances.flat[::distances.shape[0] + 1] = 0.0
-
-    return distances
+    return 0.5 * np.sum(rel_entr(p_C, m) + rel_entr(p_D, m), axis=1)
