@@ -18,7 +18,6 @@ from corpus.csv import CsvDirSentences
 
 import numpy as np
 from jsd import jensen_shannon_divergence
-from kld import KulkarniKLDEuclideanDistances, kld_metric
 
 logger = logging.getLogger(__name__)
 
@@ -94,15 +93,14 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     if kld:
         logger.info("Using Kulkarni's Negative Kullback-Liebler metric")
         logger.info('TfidfTransformer')
-        kldmetric = KulkarniKLDEuclideanDistances()
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        metric = kld_metric
+        metric = 'kld'
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         logger.info('TfidfTransformer')
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=False, smooth_idf=False,
+        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = jensen_shannon_divergence
