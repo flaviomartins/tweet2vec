@@ -3,25 +3,11 @@ from builtins import range
 
 import numpy as np
 from numpy.testing import assert_, assert_almost_equal, assert_array_almost_equal
+from scipy.spatial.distance import cdist
 from scipy.special import rel_entr
 from scipy.stats import entropy
-from scipy.sparse import issparse
-from sklearn.metrics.pairwise import check_pairwise_arrays, pairwise_distances
+from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.preprocessing import normalize
-
-
-def pairwise_jsd(X, Y):
-    X_dense = X
-    if issparse(X):
-        X_dense = X.todense()
-    if X is Y:
-        Y_dense = X_dense
-    elif issparse(Y):
-        Y_dense = Y.todense()
-    else:
-        Y_dense = Y
-
-    return pairwise_distances(X_dense, Y_dense, metric=jensen_shannon_divergence)
 
 
 # adapted from gh:luispedro/scipy
@@ -72,14 +58,14 @@ def test_jensen_shannon_divergence():
     for _ in range(8):
         a = np.random.random((1, 16))
         b = np.random.random((1, 16))
-        c = a+b
+        c = a + b
 
         assert_(jensen_shannon_divergence(a, a) < 1e-4)
         assert_(jensen_shannon_divergence(a, b) > 0.)
         assert_(jensen_shannon_divergence(a, b) >
                 jensen_shannon_divergence(a, c))
         assert_array_almost_equal(jensen_shannon_divergence(a, b),
-                                  jensen_shannon_divergence(a, b*6))
+                                  jensen_shannon_divergence(a, b * 6))
 
     a = np.array([[1, 0, 0, 0]])
     b = np.array([[0, 1, 0, 0]])
@@ -87,15 +73,15 @@ def test_jensen_shannon_divergence():
 
     a = np.array([1, 0, 0, 0], float)
     b = np.array([1, 1, 1, 1], float)
-    m = a/a.sum() + b/b.sum()
+    m = a / a.sum() + b / b.sum()
     expected = (entropy(a, m) + entropy(b, m)) / 2
     calculated = jensen_shannon_divergence(a, b)
     assert_almost_equal(calculated, expected)
 
-    a = np.random.random((2, 12))
+    a = np.random.random((1, 12))
     b = np.random.random((10, 12))
-    direct = pairwise_jsd(a, b)
-    indirect = pairwise_distances(a, b, metric=jensen_shannon_divergence)
+    direct = jensen_shannon_divergence(a, b)
+    indirect = cdist(a, b, metric=jensen_shannon_divergence)[0]
     assert_array_almost_equal(direct, indirect)
 
 

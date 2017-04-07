@@ -13,20 +13,20 @@ def cdist_kld_sparse(X, Y, p_B, **kwargs):
         X or Y may be sparse -- best csr
     """
     # todense row at a time, v slow if both v sparse
-    sxy = 2*issparse(X) + issparse(Y)
+    sxy = 2 * issparse(X) + issparse(Y)
     if sxy == 0:
         return cdist_kld(X, Y, p_B, **kwargs)
-    d = np.empty( (X.shape[0], Y.shape[0]), np.float64 )
+    d = np.empty((X.shape[0], Y.shape[0]), np.float64)
     if sxy == 2:
         for j, x in enumerate(X):
-            d[j] = cdist_kld(x.todense(), Y, p_B, **kwargs) [0]
+            d[j] = cdist_kld(x.todense(), Y, p_B, **kwargs)[0]
     elif sxy == 1:
         for k, y in enumerate(Y):
-            d[:,k] = cdist_kld(X, y.todense(), p_B, **kwargs) [0]
+            d[:, k] = cdist_kld(X, y.todense(), p_B, **kwargs)[0]
     else:
         for j, x in enumerate(X):
             for k, y in enumerate(Y):
-                d[j,k] = cdist_kld(x.todense(), y.todense(), p_B, **kwargs) [0]
+                d[j, k] = cdist_kld(x.todense(), y.todense(), p_B, **kwargs)[0]
     return d
 
 
@@ -93,8 +93,8 @@ def kld_metric(X, Y, p_B, a=0.1, **kwargs):
     else:
         Y_normalized = normalize(Y, norm='l1', copy=True)
 
-    a_p_B = a*p_B
-    p_D = (1-a)*X_normalized + a_p_B
+    a_p_B = a * p_B
+    p_D = (1 - a) * X_normalized + a_p_B
     p_C = Y_normalized
 
     m = (p_C + p_D)
