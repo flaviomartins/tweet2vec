@@ -5,6 +5,7 @@ import numpy as np
 from numpy.testing import assert_, assert_almost_equal, assert_array_almost_equal
 from scipy.spatial.distance import cdist
 from scipy.special import rel_entr
+from scipy.special import xlogy
 from scipy.stats import entropy
 from sklearn.metrics.pairwise import check_pairwise_arrays
 from sklearn.preprocessing import normalize
@@ -27,45 +28,24 @@ def jensen_shannon_divergence(X, Y):
     entropy : function
         Computes entropy and K-L divergence
     """
-    X, Y = check_pairwise_arrays(np.atleast_2d(X), np.atleast_2d(Y))
-
-    X_normalized = normalize(X, norm='l1', copy=True)
-
-    if X is Y:  # shortcut in the common case euclidean_distances(X, X)
-        Y_normalized = X_normalized
-    else:
-        Y_normalized = normalize(Y, norm='l1', copy=True)
-
-    m = (X_normalized + Y_normalized)
+    X, Y = np.atleast_2d(X), np.atleast_2d(Y)
+    m = X + Y
     m /= 2.
-    m = np.where(m, m, 1.)
-
-    XXm_rel_entr = rel_entr(X_normalized, m)
-    YYm_rel_entr = rel_entr(Y_normalized, m)
-
-    distances = 0.5 * np.sum(XXm_rel_entr + YYm_rel_entr, axis=1)
-    np.maximum(distances, 0, out=distances)
-
-    if X is Y:
-        # Ensure that distances between vectors and themselves are set to 0.0.
-        # This may not be the case due to floating point rounding errors.
-        distances.flat[::distances.shape[0] + 1] = 0.0
-
-    return distances
+    return 0.5 * np.sum(rel_entr(X, m) + rel_entr(Y, m), axis=1)
 
 
 def test_jensen_shannon_divergence():
     for _ in range(8):
-        a = np.random.random((1, 16))
-        b = np.random.random((1, 16))
-        c = a + b
+        a = normalize(np.random.random((1, 16)), norm='l1', copy=True)
+        b = normalize(np.random.random((1, 16)), norm='l1', copy=True)
+        c = normalize(a + b, norm='l1', copy=True)
 
         assert_(jensen_shannon_divergence(a, a) < 1e-4)
         assert_(jensen_shannon_divergence(a, b) > 0.)
         assert_(jensen_shannon_divergence(a, b) >
                 jensen_shannon_divergence(a, c))
         assert_array_almost_equal(jensen_shannon_divergence(a, b),
-                                  jensen_shannon_divergence(a, b * 6))
+                                  jensen_shannon_divergence(a, normalize(b * 6, norm='l1', copy=True)))
 
     a = np.array([[1, 0, 0, 0]])
     b = np.array([[0, 1, 0, 0]])
@@ -75,7 +55,7 @@ def test_jensen_shannon_divergence():
     b = np.array([1, 1, 1, 1], float)
     m = a / a.sum() + b / b.sum()
     expected = (entropy(a, m) + entropy(b, m)) / 2
-    calculated = jensen_shannon_divergence(a, b)
+    calculated = jensen_shannon_divergence(a, normalize(np.atleast_2d(b), norm='l1', copy=True))
     assert_almost_equal(calculated, expected)
 
     a = np.random.random((1, 12))

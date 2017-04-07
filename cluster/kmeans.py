@@ -9,6 +9,8 @@ from scipy.spatial.distance import cdist  # $scipy/spatial/distance.py
 # http://docs.scipy.org/doc/scipy/reference/spatial.html
 from scipy.sparse import issparse  # $scipy/sparse/csr.py
 from sklearn.metrics.pairwise import cosine_distances
+
+from jsd import jensen_shannon_divergence
 from kld import cdist_kld_sparse
 
 __date__ = "2011-11-17 Nov denis"
@@ -55,6 +57,8 @@ def kmeans(X, centres, delta=.001, maxiter=10, metric="euclidean", p=2, verbose=
     for jiter in range(1, maxiter + 1):
         if metric in ['cosine', 'cos']:
             D = cosine_distances(X, centres)
+        elif metric in ['jsd', 'jensen-shannon']:
+            D = cdist_sparse(X, centres, metric=jensen_shannon_divergence)
         elif metric in ['kld', 'kullback-leibler']:
             centres_mean = centres.mean(axis=0)
             D = cdist_kld_sparse(X, centres, p_B=centres_mean)
