@@ -6,6 +6,8 @@ from __future__ import print_function
 import sys
 from time import time
 
+import pickle
+
 import io
 import six
 import logging
@@ -19,7 +21,6 @@ from corpus.jsonl import JsonlDirSentences
 from corpus.csv import CsvDirSentences
 
 import numpy as np
-from jsd import jensen_shannon_divergence
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,15 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
             for ind in order_centroids[i, :20]:
                 f.write(u' {}'.format(terms[ind]))
             f.write(u'\n')
+
+    np.save(out_loc + '_centres.npy', centres)
+    np.savetxt(out_loc + '_centres.txt', centres)
+
+    with open(out_loc + '_count_vect.pk', 'wb') as cv:
+        pickle.dump(count_vect, cv)
+
+    with open(out_loc + '_tf_transformer.pk', 'wb') as tf:
+        pickle.dump(tf_transformer, tf)
 
 
 if __name__ == '__main__':
