@@ -98,6 +98,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     for tid, raw, sentence in iter_sentences(sentences):
         if tid in cass:
+            C = cass[tid]
             fds[C].write(raw)
 
     for fd in fds:
