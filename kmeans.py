@@ -30,7 +30,7 @@ def split_on_space(text):
 
 
 def iter_sentences(sentences):
-    for sentence in sentences:
+    for tid, raw, sentence in sentences:
         unicode_sentence = []
         for token in sentence:
             if isinstance(token, six.binary_type):
