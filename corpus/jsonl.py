@@ -51,8 +51,9 @@ class JsonlDirSentences(object):
         # process the corpus in smaller chunks of docs, because multiprocessing.Pool
         # is dumb and would load the entire input into RAM at once...
         for group in utils.chunkize(files, chunksize=self.job_size * self.n_workers, maxsize=1):
-            for texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
-                for tokens in texts:
+            for tids, texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
+                for doc in zip(tids, texts):
+                    tid, tokens = doc
                     articles_all += 1
                     positions_all += len(tokens)
                     # article redirects and short stubs are pruned here
@@ -60,7 +61,7 @@ class JsonlDirSentences(object):
                         continue
                     articles += 1
                     positions += len(tokens)
-                    yield tokens
+                    yield tid, tokens
         pool.terminate()
 
         logger.info(
@@ -86,9 +87,10 @@ def process_file(args):
             f = io.open(filepath, 'rt', encoding='utf-8')
     except IOError:
         logger.warning('COULD NOT READ: %s', filepath)
-        return []
+        return [], []
 
-    result = []
+    tids = []
+    texts = []
     for line in f:
         if isinstance(line, six.binary_type):
             try:
@@ -104,7 +106,10 @@ def process_file(args):
             except ValueError as ve:
                 logger.warning('DECODE FAIL: %s %s', filepath, ve)
                 continue
-        if 'text' in data:
-            result.append(twokenize.tokenizeRawTweetText(data['text']))
+        if 'id' in data:
+            tid = data['id']
+            if 'text' in data:
+                tids.append(tid)
+                texts.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
-    return process_texts(result, lemmatize=lemmatize)
+    return tids, process_texts(texts, lemmatize=lemmatize)
