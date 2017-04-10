@@ -45,8 +45,9 @@ class CsvDirSentences(object):
         # process the corpus in smaller chunks of docs, because multiprocessing.Pool
         # is dumb and would load the entire input into RAM at once...
         for group in utils.chunkize(files, chunksize=self.job_size * self.n_workers, maxsize=1):
-            for texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
-                for tokens in texts:
+            for tids, raws, texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
+                for doc in zip(tids, raws, texts):
+                    tid, raw, tokens = doc
                     articles_all += 1
                     positions_all += len(tokens)
                     # article redirects and short stubs are pruned here
@@ -54,7 +55,7 @@ class CsvDirSentences(object):
                         continue
                     articles += 1
                     positions += len(tokens)
-                    yield tokens
+                    yield tid, raw, tokens
         pool.terminate()
 
         logger.info(
@@ -80,11 +81,14 @@ def process_file(args):
             csvfile = open(filepath, 'rb')
     except IOError:
         logger.warning('COULD NOT READ: %s', filepath)
-        return []
+        return [], [], []
 
     # TODO: csv module has problems with null bytes?
     reader = csv.reader(csvfile, encoding='utf-8')
     next(reader, None)  # skip the headers
+
+    tids = []
+    raws = []
     result = []
     try:
         for row in reader:
@@ -93,4 +97,4 @@ def process_file(args):
         logger.warning('DECODE FAIL: %s %s', filepath, ce.message)
         pass
     csvfile.close()
-    return process_texts(result, lemmatize=lemmatize)
+    return tids, raws, process_texts(result, lemmatize=lemmatize)

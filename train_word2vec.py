@@ -16,6 +16,11 @@ from corpus.csv import CsvDirSentences
 logger = logging.getLogger(__name__)
 
 
+def iter_sentences(sentences):
+    for tid, raw, sentence in sentences:
+        yield sentence
+
+
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
@@ -58,8 +63,8 @@ def main(in_dir, out_loc, skipgram=0, negative=5, n_workers=cpu_count()-1, windo
         print('Unsupported corpus format specified.')
         sys.exit(1)
 
-    model.build_vocab(sentences, progress_per=10000)
-    model.train(sentences)
+    model.build_vocab(iter_sentences(sentences), progress_per=10000)
+    model.train(iter_sentences(sentences))
 
     model.save(out_loc)
 

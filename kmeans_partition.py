@@ -32,13 +32,13 @@ def split_on_space(text):
 
 
 def iter_sentences(sentences):
-    for tid, sentence in sentences:
+    for tid, raw, sentence in sentences:
         unicode_sentence = []
         for token in sentence:
             if isinstance(token, six.binary_type):
                 token = token.decode('utf-8')
             unicode_sentence.append(token)
-        yield tid, ' '.join([token for token in unicode_sentence])
+        yield tid, raw, ' '.join([token for token in unicode_sentence])
 
 
 @plac.annotations(
@@ -113,7 +113,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     centres = np.load(out_loc + '_centres.npy')
     # centres = np.loadtxt(out_loc + '_centres.txt')
 
-    for tid, sentence in iter_sentences(sentences):
+    for tid, raw, sentence in iter_sentences(sentences):
         vec = count_vect.transform([sentence])
         vec = tf_transformer.transform(vec)
         vec = vec.todense()

@@ -20,6 +20,11 @@ from corpus.csv import CsvDirSentences
 logger = logging.getLogger(__name__)
 
 
+def iter_sentences(sentences):
+    for tid, raw, sentence in sentences:
+        yield sentence
+
+
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
@@ -55,11 +60,11 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_topics=10, chunk_size=2000
         sys.exit(1)
 
     logger.info('Dictionary')
-    dictionary = Dictionary(sentences)
+    dictionary = Dictionary(iter_sentences(sentences))
     dictionary.filter_extremes(no_below=20, no_above=0.5)
 
     logger.info('Corpus')
-    corpus = [dictionary.doc2bow(text) for text in sentences]
+    corpus = [dictionary.doc2bow(text) for text in iter_sentences(sentences)]
 
     logger.info('id2word')
     # Make a index to word dictionary.
