@@ -51,9 +51,9 @@ class JsonlDirSentences(object):
         # process the corpus in smaller chunks of docs, because multiprocessing.Pool
         # is dumb and would load the entire input into RAM at once...
         for group in utils.chunkize(files, chunksize=self.job_size * self.n_workers, maxsize=1):
-            for tids, texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
-                for doc in zip(tids, texts):
-                    tid, tokens = doc
+            for tids, raws, texts in pool.imap(process_file, zip(group, itertools.repeat(self.lemmatize))):
+                for doc in zip(tids, raws, texts):
+                    tid, raw, tokens = doc
                     articles_all += 1
                     positions_all += len(tokens)
                     # article redirects and short stubs are pruned here
@@ -61,7 +61,7 @@ class JsonlDirSentences(object):
                         continue
                     articles += 1
                     positions += len(tokens)
-                    yield tid, tokens
+                    yield tid, raw, tokens
         pool.terminate()
 
         logger.info(
@@ -87,9 +87,10 @@ def process_file(args):
             f = io.open(filepath, 'rt', encoding='utf-8')
     except IOError:
         logger.warning('COULD NOT READ: %s', filepath)
-        return [], []
+        return [], [], []
 
     tids = []
+    raws = []
     texts = []
     for line in f:
         if isinstance(line, six.binary_type):
@@ -110,6 +111,7 @@ def process_file(args):
             tid = data['id']
             if 'text' in data:
                 tids.append(tid)
+                raws.append(line)
                 texts.append(twokenize.tokenizeRawTweetText(data['text']))
     f.close()
-    return tids, process_texts(texts, lemmatize=lemmatize)
+    return tids, raws, process_texts(texts, lemmatize=lemmatize)
