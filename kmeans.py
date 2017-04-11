@@ -3,24 +3,22 @@
 
 from __future__ import print_function
 
+import pickle
 import sys
 from time import time
 
-import pickle
-
-import io
-import six
 import logging
+import numpy as np
 import plac
-
+import six
+from gensim import utils
 from multiprocessing import cpu_count
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from cluster.kmeans import randomsample, Kmeans
-from gensim import utils
-from corpus.jsonl import JsonlDirSentences
-from corpus.csv import CsvDirSentences
 
-import numpy as np
+import io
+from corpus.csv import CsvDirSentences
+from corpus.jsonl import JsonlDirSentences
+from tcluster.cluster.kmeans import randomsample, Kmeans
 
 logger = logging.getLogger(__name__)
 
