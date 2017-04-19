@@ -112,7 +112,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         vec = count_vect.transform([sentence])
         vec = tf_transformer.transform(vec)
         vec = vec.todense()
-        C = nearestcentres(vec, centres, metric=jensen_shannon_divergence)[0]
+        C = nearestcentres(vec, centres, metric=metric)[0]
         print(u"{} {}".format(tid, C))
 
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
