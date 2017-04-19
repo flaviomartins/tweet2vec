@@ -12,7 +12,6 @@ import numpy as np
 import plac
 import six
 from gensim import utils
-from tcluster.metrics.jsd import jensen_shannon_divergence
 from multiprocessing import cpu_count
 
 from corpus.csv import CsvDirSentences
