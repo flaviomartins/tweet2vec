@@ -95,7 +95,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         metric = "euclidean"
 
     t0 = time()
-    print("Kmeans Partitioning")
+    logger.info("Kmeans Partitioning")
     logger.info('CountVectorizer')
     with open(out_loc + '_count_vect.pk', 'rb') as cv:
         count_vect = pickle.load(cv)
@@ -115,7 +115,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         C = nearestcentres(vec, centres, metric=jensen_shannon_divergence)[0]
         print(u"{} {}".format(tid, C))
 
-    print("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
+    logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
 
 if __name__ == '__main__':

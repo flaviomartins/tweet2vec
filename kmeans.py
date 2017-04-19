@@ -127,7 +127,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     else:
         km = Kmeans(X_train_tf, k=num_clusters, delta=.001, maxiter=iterations, metric=metric, verbose=2)
     centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
-    print("Kmeans: %.0f msec" % ((time() - t0) * 1000))
+    logger.info("Kmeans: %.0f msec" % ((time() - t0) * 1000))
 
     order_centroids = np.array(centres).argsort()[:, ::-1]
     terms = count_vect.get_feature_names()

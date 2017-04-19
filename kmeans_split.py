@@ -80,7 +80,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         sys.exit(1)
 
     t0 = time()
-    print("Kmeans Split")
+    logger.info("Kmeans Split")
 
     cass = {}
     with io.open(out_loc, 'rt') as f:
@@ -104,7 +104,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     for fd in fds:
         fd.close()
 
-    print("Kmeans Split: %.0f msec" % ((time() - t0) * 1000))
+    logger.info("Kmeans Split: %.0f msec" % ((time() - t0) * 1000))
 
 
 if __name__ == '__main__':
