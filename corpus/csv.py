@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import traceback
 
 from builtins import next
 from builtins import zip
@@ -73,28 +74,33 @@ def iter_files(directory, prefixes):
 
 
 def process_file(args):
-    filepath, lemmatize = args
     try:
-        if filepath.endswith('.gz'):
-            csvfile = gzip.open(filepath, 'rb')
-        else:
-            csvfile = open(filepath, 'rb')
-    except IOError:
-        logger.warning('COULD NOT READ: %s', filepath)
-        return [], [], []
+        filepath, lemmatize = args
+        try:
+            if filepath.endswith('.gz'):
+                csvfile = gzip.open(filepath, 'rb')
+            else:
+                csvfile = open(filepath, 'rb')
+        except IOError:
+            logger.warning('COULD NOT READ: %s', filepath)
+            return [], [], []
 
-    # TODO: csv module has problems with null bytes?
-    reader = csv.reader(csvfile, encoding='utf-8')
-    next(reader, None)  # skip the headers
+        # TODO: csv module has problems with null bytes?
+        reader = csv.reader(csvfile, encoding='utf-8')
+        next(reader, None)  # skip the headers
 
-    tids = []
-    raws = []
-    result = []
-    try:
-        for row in reader:
-            result.append(twokenize.tokenizeRawTweetText(row[3]))
-    except csv.Error as ce:
-        logger.warning('DECODE FAIL: %s %s', filepath, ce.message)
-        pass
-    csvfile.close()
-    return tids, raws, process_texts(result, lemmatize=lemmatize)
+        tids = []
+        raws = []
+        result = []
+        try:
+            for row in reader:
+                result.append(twokenize.tokenizeRawTweetText(row[3]))
+        except csv.Error as ce:
+            logger.warning('DECODE FAIL: %s %s', filepath, ce.message)
+            pass
+        csvfile.close()
+        return tids, raws, process_texts(result, lemmatize=lemmatize)
+    except Exception:
+        print("Exception in worker:")
+        traceback.print_exc()
+        raise

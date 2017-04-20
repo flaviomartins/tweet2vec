@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import traceback
 
 from builtins import zip
 from builtins import object
@@ -79,39 +80,44 @@ def iter_files(directory, prefixes):
 
 
 def process_file(args):
-    filepath, lemmatize = args
     try:
-        if filepath.endswith('.gz'):
-            f = gzip.open(filepath)
-        else:
-            f = io.open(filepath, 'rt', encoding='utf-8')
-    except IOError:
-        logger.warning('COULD NOT READ: %s', filepath)
-        return [], [], []
-
-    tids = []
-    raws = []
-    texts = []
-    for line in f:
-        if isinstance(line, six.binary_type):
-            try:
-                line = line.decode('utf-8')
-            except UnicodeDecodeError as ude:
-                logger.warning('DECODE FAIL: %s %s', filepath, ude.message)
-                continue
+        filepath, lemmatize = args
         try:
-            data = ujson.loads(line)
-        except ValueError:
+            if filepath.endswith('.gz'):
+                f = gzip.open(filepath)
+            else:
+                f = io.open(filepath, 'rt', encoding='utf-8')
+        except IOError:
+            logger.warning('COULD NOT READ: %s', filepath)
+            return [], [], []
+
+        tids = []
+        raws = []
+        texts = []
+        for line in f:
+            if isinstance(line, six.binary_type):
+                try:
+                    line = line.decode('utf-8')
+                except UnicodeDecodeError as ude:
+                    logger.warning('DECODE FAIL: %s %s', filepath, ude.message)
+                    continue
             try:
-                data = json.loads(line)
-            except ValueError as ve:
-                logger.warning('DECODE FAIL: %s %s', filepath, ve)
-                continue
-        if 'id' in data:
-            tid = data['id']
-            if 'text' in data:
-                tids.append(tid)
-                raws.append(line)
-                texts.append(twokenize.tokenizeRawTweetText(data['text']))
-    f.close()
-    return tids, raws, process_texts(texts, lemmatize=lemmatize)
+                data = ujson.loads(line)
+            except ValueError:
+                try:
+                    data = json.loads(line)
+                except ValueError as ve:
+                    logger.warning('DECODE FAIL: %s %s', filepath, ve)
+                    continue
+            if 'id' in data:
+                tid = data['id']
+                if 'text' in data:
+                    tids.append(tid)
+                    raws.append(line)
+                    texts.append(twokenize.tokenizeRawTweetText(data['text']))
+        f.close()
+        return tids, raws, process_texts(texts, lemmatize=lemmatize)
+    except Exception:
+        print("Exception in worker:")
+        traceback.print_exc()
+        raise
