@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+
+import traceback
+
 from builtins import zip
 
 import pickle
@@ -12,6 +15,7 @@ import logging
 import numpy as np
 import plac
 import six
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from gensim import utils
 from multiprocessing import cpu_count
 
@@ -109,14 +113,28 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     # centres = np.loadtxt(out_loc + '_centres.txt')
     centres_mean = centres.mean(axis=0)
 
-    sents = iter_sentences(sentences)
-    for group in grouper(job_size * n_workers, sents):
-        X = count_vect.transform([sentence[2] for sentence in group])
+    def assign_centres(agroup):
+        tids = [sentence[0] for sentence in agroup]
+        docs = [sentence[2] for sentence in agroup]
+        X = count_vect.transform(docs)
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
-        for sentence, c in zip(group, C):
-            tid = sentence[0]
-            print(u"{} {}".format(tid, c))
+        return tids, C
+
+    sents = iter_sentences(sentences)
+    with ThreadPoolExecutor(max_workers=n_workers) as executor:
+        for group in grouper(n_workers * job_size, sents):
+            # Start the load operations and mark each future with its URL
+            future_to_tgroup = {executor.submit(assign_centres, tgroup): tgroup for tgroup in grouper(job_size, group)}
+            for future in as_completed(future_to_tgroup):
+                tgroup = future_to_tgroup[future]
+                try:
+                    tids, C = future.result()
+                    for tid, c in zip(tids, C):
+                        print(u"{} {}".format(tid, c))
+                except Exception as exc:
+                    logger.error('generated an exception: %s' % (exc))
+                    traceback.print_exc()
 
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
