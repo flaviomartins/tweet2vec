@@ -110,11 +110,16 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     sents = iter_sentences(sentences)
     for group in grouper(job_size * n_workers, sents):
-        X = count_vect.transform([sentence[2] for sentence in group])
+        tids = []
+        docs = []
+        for sentence in group:
+            if len(sentence) == 3:
+                tids.append(sentence[0])
+                docs.append(sentence[2])
+        X = count_vect.transform(docs)
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric)
-        for sentence, c in zip(group, C):
-            tid = sentence[0]
+        for tid, c in zip(tids, C):
             print(u"{} {}".format(tid, c))
 
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
