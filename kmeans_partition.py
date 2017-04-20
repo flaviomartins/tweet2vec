@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+from builtins import zip
 
 import pickle
 import sys
-from itertools import izip_longest
 from time import time
 
 import logging
@@ -108,8 +108,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     centres = np.load(out_loc + '_centres.npy')
     # centres = np.loadtxt(out_loc + '_centres.txt')
 
-    for group in grouper(job_size * n_workers, iter_sentences(sentences), None):
-        X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
+    for group in grouper(job_size * n_workers, iter_sentences(sentences)):
+        X = count_vect.transform([sentence[2] for sentence in group])
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric)
         for sentence, c in zip(group, C):
@@ -119,10 +119,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
 
-def grouper(n, iterable, fillvalue=None):
-    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+def grouper(n, iterable):
+    """grouper(3, 'ABCDEFG') --> ABC DEF G"""
     args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
+    return zip(*args)
 
 
 if __name__ == '__main__':
