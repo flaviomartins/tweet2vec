@@ -33,7 +33,7 @@ Filtered = re.compile(
     ), re.UNICODE)
 
 
-def process_texts(texts, lemmatize=True, stem=True):
+def process_texts(texts, lemmatize=False, stem=True):
     """
     Function to process texts. Following are the steps we take:
 
@@ -68,6 +68,7 @@ def process_texts(texts, lemmatize=True, stem=True):
         if stem:
             texts = [[
                         token if token.startswith("#") else stemmer.stem(token) for token in line
-                        ] for line in texts]
+                        ] for line in texts
+                     ]
         texts = [[token for token in line if 3 <= len(token)] for line in texts]
     return texts
