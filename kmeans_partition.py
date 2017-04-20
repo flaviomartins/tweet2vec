@@ -109,7 +109,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     # centres = np.loadtxt(out_loc + '_centres.txt')
 
     sents = iter_sentences(sentences)
-    for group in grouper(job_size * n_workers, sents):
+    for group in grouper(job_size, sents):
         X = count_vect.transform([sentence[2] for sentence in group])
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric)
