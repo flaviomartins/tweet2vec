@@ -107,12 +107,13 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     terms = count_vect.get_feature_names()
     centres = np.load(out_loc + '_centres.npy')
     # centres = np.loadtxt(out_loc + '_centres.txt')
+    centres_mean = centres.mean(axis=0)
 
     sents = iter_sentences(sentences)
     for group in grouper(job_size * n_workers, sents):
         X = count_vect.transform([sentence[2] for sentence in group])
         X = tf_transformer.transform(X)
-        C = nearestcentres(X, centres, metric=metric)
+        C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
         for sentence, c in zip(group, C):
             tid = sentence[0]
             print(u"{} {}".format(tid, c))
