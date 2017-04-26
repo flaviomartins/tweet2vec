@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+
+from itertools import izip_longest
+
 from builtins import zip
 
 import pickle
@@ -111,7 +114,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     sents = iter_sentences(sentences)
     for group in grouper(job_size * n_workers, sents):
-        X = count_vect.transform([sentence[2] for sentence in group])
+        X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
         for sentence, c in zip(group, C):
@@ -121,10 +124,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
 
-def grouper(n, iterable):
-    """grouper(3, 'ABCDEFG') --> ABC DEF G"""
+def grouper(n, iterable, fillvalue=None):
+    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
     args = [iter(iterable)] * n
-    return zip(*args)
+    return izip_longest(fillvalue=fillvalue, *args)
 
 
 if __name__ == '__main__':
