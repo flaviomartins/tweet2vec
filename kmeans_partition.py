@@ -4,7 +4,6 @@
 from __future__ import print_function
 
 import traceback
-from itertools import izip_longest
 
 from builtins import zip
 
@@ -115,8 +114,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     centres_mean = centres.mean(axis=0)
 
     def assign_centres(agroup):
-        tids = [sentence[0] for sentence in agroup if sentence is not None]
-        docs = [sentence[2] for sentence in agroup if sentence is not None]
+        tids = [sentence[0] for sentence in agroup]
+        docs = [sentence[2] for sentence in agroup]
         X = count_vect.transform(docs)
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
@@ -140,10 +139,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
 
-def grouper(n, iterable, fillvalue=None):
-    "grouper(3, 'ABCDEFG', 'x') --> ABC DEF Gxx"
+def grouper(n, iterable):
+    """grouper(3, 'ABCDEFG') --> ABC DEF G"""
     args = [iter(iterable)] * n
-    return izip_longest(fillvalue=fillvalue, *args)
+    return zip(*args)
 
 
 if __name__ == '__main__':
