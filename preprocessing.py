@@ -59,7 +59,7 @@ def process_texts(texts, lemmatize=False, stem=True):
     if lemmatize:
         texts = [[
                      re.split('/', token)[0] for token in utils.lemmatize(' '.join(line),
-                                                                          allowed_tags=re.compile('(NN|VB|JJ|RB)'),
+                                                                          allowed_tags=re.compile('(NN)'),
                                                                           min_length=3)
                      ] for line in texts
                  ]
