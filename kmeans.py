@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import io
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
-from tcluster.cluster.kmeans import randomsample, Kmeans
+from tcluster.cluster.kmeans import KMeans, SampleKMeans
 
 logger = logging.getLogger(__name__)
 
@@ -123,14 +123,17 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     t0 = time()
     if no_minibatch:
-        randomcentres = randomsample(X_train_tf, num_clusters)
-        km = Kmeans(X_train_tf, centres=randomcentres, delta=delta, maxiter=iterations, metric=metric, verbose=2)
+        km = KMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric,
+                    tol=delta, verbose=2)
     else:
-        km = Kmeans(X_train_tf, k=num_clusters, delta=delta, maxiter=iterations, metric=metric, verbose=2)
-    centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
+        km = SampleKMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric,
+                          init_size=None, tol=delta, verbose=2)
+
+    t0 = time()
+    km.fit(X_train_tf)
     logger.info("Kmeans: %.0f msec" % ((time() - t0) * 1000))
 
-    order_centroids = np.array(centres).argsort()[:, ::-1]
+    order_centroids = km.cluster_centers_.argsort()[:, ::-1]
     terms = count_vect.get_feature_names()
 
     with io.open(out_loc, 'wt', encoding='utf-8') as f:
@@ -140,8 +143,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                 f.write(u' {}'.format(terms[ind]))
             f.write(u'\n')
 
-    np.save(out_loc + '_centres.npy', centres)
-    np.savetxt(out_loc + '_centres.txt', centres)
+    np.save(out_loc + '_centres.npy', km.cluster_centers_)
+    np.savetxt(out_loc + '_centres.txt', km.cluster_centers_)
 
     with open(out_loc + '_count_vect.pk', 'wb') as cv:
         pickle.dump(count_vect, cv)
