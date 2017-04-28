@@ -51,6 +51,7 @@ def iter_sentences(sentences):
     no_lemmas=("Disable Lemmatization.", "flag", "nl", bool),
     no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "nm", bool),
     max_features=("Maximum number of features (dimensions) to extract from text.", "option", "D", int),
+    delta=("Improvement threshold for stopping.", "option", "d", float),
     binary_tf=("Make tf term in tf-idf binary.", "flag", "b", bool),
     sublinear_tf=("Apply sublinear tf scaling, i.e. replace tf with 1 + log(tf).", "flag", "l", bool),
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
@@ -60,7 +61,7 @@ def iter_sentences(sentences):
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
-         job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, no_minibatch=False,
+         job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, delta=.001, no_minibatch=False,
          binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, kld=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
@@ -123,9 +124,9 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     t0 = time()
     if no_minibatch:
         randomcentres = randomsample(X_train_tf, num_clusters)
-        km = Kmeans(X_train_tf, centres=randomcentres, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+        km = Kmeans(X_train_tf, centres=randomcentres, delta=delta, maxiter=iterations, metric=metric, verbose=2)
     else:
-        km = Kmeans(X_train_tf, k=num_clusters, delta=.001, maxiter=iterations, metric=metric, verbose=2)
+        km = Kmeans(X_train_tf, k=num_clusters, delta=delta, maxiter=iterations, metric=metric, verbose=2)
     centres, Xtocentre, distances = km.centres, km.Xtocentre, km.distances
     logger.info("Kmeans: %.0f msec" % ((time() - t0) * 1000))
 
