@@ -58,11 +58,12 @@ def iter_sentences(sentences):
     cosine=("Use cosine distances in place of euclidean distances.", "flag", "cos", bool),
     jsd=("Use Jensen-Shannon divergence in place of euclidean distances.", "flag", "jsd", bool),
     kld=("Use Kulkarni's Negative Kullback-Liebler metric in place of euclidean distances.", "flag", "kld", bool),
+    a=("JM smoothing lambda for KLD metric.", "option", "a", float),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, delta=.001, no_minibatch=False,
-         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, kld=False, verbose=False):
+         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, kld=False, a=.7, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     minibatch = not no_minibatch
@@ -123,10 +124,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     t0 = time()
     if no_minibatch:
-        km = KMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric,
+        km = KMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric, a=a,
                     tol=delta, verbose=2)
     else:
-        km = SampleKMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric,
+        km = SampleKMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric, a=a,
                           init_size=None, tol=delta, verbose=2)
 
     t0 = time()
