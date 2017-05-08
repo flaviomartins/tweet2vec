@@ -57,13 +57,13 @@ def iter_sentences(sentences):
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
     cosine=("Use cosine distances in place of euclidean distances.", "flag", "cos", bool),
     jsd=("Use Jensen-Shannon divergence in place of euclidean distances.", "flag", "jsd", bool),
-    kld=("Use Kulkarni's Negative Kullback-Liebler metric in place of euclidean distances.", "flag", "kld", bool),
+    nkl=("Use Negative Kullback-Liebler metric in place of euclidean distances.", "flag", "nkl", bool),
     a=("JM smoothing lambda for KLD metric.", "option", "a", float),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, delta=.001, no_minibatch=False,
-         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, kld=False, a=.7, verbose=False):
+         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, nkl=False, a=.7, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     minibatch = not no_minibatch
@@ -93,13 +93,13 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                                  max_features=max_features, vocabulary=None, binary=binary_tf)
     X_train_counts = count_vect.fit_transform(iter_sentences(sentences))
 
-    if kld:
-        logger.info("Using Kulkarni's Negative Kullback-Liebler metric")
+    if nkl:
+        logger.info("Using Negative Kullback-Liebler metric")
         logger.info('TfidfTransformer')
         tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        metric = 'kld'
+        metric = 'nkl'
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         logger.info('TfidfTransformer')

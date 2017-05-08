@@ -58,12 +58,12 @@ def iter_sentences(sentences):
     no_idf=("Disable Inverse Document Frequency feature weighting.", "flag", "ni", bool),
     cosine=("Use cosine distances in place of euclidean distances.", "flag", "cos", bool),
     jsd=("Use Jensen-Shannon divergence in place of euclidean distances.", "flag", "jsd", bool),
-    kld=("Use Kulkarni's Negative Kullback-Liebler metric in place of euclidean distances.", "flag", "kld", bool),
+    nkl=("Use Negative Kullback-Liebler metric in place of euclidean distances.", "flag", "nkl", bool),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
 def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, no_minibatch=False,
-         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, kld=False, verbose=False):
+         binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, nkl=False, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
     lemmatize = not no_lemmas
     minibatch = not no_minibatch
@@ -84,9 +84,9 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         print('Unsupported corpus format specified.')
         sys.exit(1)
 
-    if kld:
-        logger.info("Using Kulkarni's Negative Kullback-Liebler metric")
-        metric = 'kld'
+    if nkl:
+        logger.info("Using Negative Kullback-Liebler metric")
+        metric = 'nkl'
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         metric = 'jsd'
