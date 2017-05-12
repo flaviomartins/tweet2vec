@@ -129,6 +129,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                     tol=delta, verbose=True)
     else:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=1,
+                             max_no_improvement=iterations, compute_labels=True,
                              metric=metric, metric_kwargs={'a': a},
                              init_size=None, batch_size=batchsize, tol=delta, verbose=True)
 
