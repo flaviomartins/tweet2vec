@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import io
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
-from tcluster.cluster.kmeans import KMeans, SampleKMeans
+from tcluster.cluster.kmeans import KMeans, SampleKMeans, MiniBatchKMeans
 
 logger = logging.getLogger(__name__)
 
@@ -124,12 +124,15 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     t0 = time()
     if no_minibatch:
-        km = KMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric, a=a,
-                    tol=delta, verbose=2)
+        km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=1,
+                    metric=metric, metric_kwargs={'a': a},
+                    tol=delta, verbose=True)
     else:
-        km = SampleKMeans(n_clusters=num_clusters, max_iter=iterations, n_init=1, metric=metric, a=a,
-                          init_size=None, tol=delta, verbose=2)
+        km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=1,
+                             metric=metric, metric_kwargs={'a': a},
+                             init_size=None, batch_size=batchsize, tol=delta, verbose=True)
 
+    logger.info("Clustering sparse data with %s" % km)
     t0 = time()
     km.fit(X_train_tf)
     logger.info("Kmeans: %.0f msec" % ((time() - t0) * 1000))
