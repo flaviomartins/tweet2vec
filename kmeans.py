@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import io
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
-from tcluster.cluster.kmeans import KMeans, SampleKMeans, MiniBatchKMeans
+from tcluster.cluster import KMeans, SampleKMeans, MiniBatchKMeans
 
 logger = logging.getLogger(__name__)
 

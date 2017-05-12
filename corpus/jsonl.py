@@ -74,7 +74,7 @@ class JsonlDirSentences(object):
 
 def iter_files(directory, prefixes):
     for root, dirnames, filenames in walk(directory):
-        for filename in fnmatch.filter(filenames, '*.jsonl*'):
+        for filename in fnmatch.filter(filenames, '*'):
             if prefixes is None or filename.lower().split('.')[0] in prefixes:
                 yield path.join(root, filename)
 
