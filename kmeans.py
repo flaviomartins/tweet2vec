@@ -46,7 +46,7 @@ def iter_sentences(sentences):
     batch_size=("Batch size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int),
-    fformat=("By default (ff=jsonl), JSONL format is used."
+    fformat=("By default (ff=jsonl), JSONL format is used. "
              "Otherwise (ff='csv'), CSV format is used.", "option", "ff", str),
     no_lemmas=("Disable Lemmatization.", "flag", "nl", bool),
     no_minibatch=("Use ordinary k-means algorithm (in batch mode).", "flag", "nm", bool),

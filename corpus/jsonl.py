@@ -4,6 +4,7 @@ import traceback
 from builtins import zip
 from builtins import object
 
+import bz2
 import gzip
 import io
 import six
@@ -83,7 +84,9 @@ def process_file(args):
     try:
         filepath, lemmatize = args
         try:
-            if filepath.endswith('.gz'):
+            if filepath.endswith('.bz2'):
+                f = bz2.BZ2File(filepath, 'rb')
+            elif filepath.endswith('.gz'):
                 f = gzip.open(filepath)
             else:
                 f = io.open(filepath, 'rt', encoding='utf-8')

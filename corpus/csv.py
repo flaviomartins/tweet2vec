@@ -5,6 +5,7 @@ from builtins import next
 from builtins import zip
 from builtins import object
 
+import bz2
 import gzip
 import unicodecsv as csv
 
@@ -77,7 +78,9 @@ def process_file(args):
     try:
         filepath, lemmatize = args
         try:
-            if filepath.endswith('.gz'):
+            if filepath.endswith('.bz2'):
+                csvfile = bz2.BZ2File(filepath, 'rb')
+            elif filepath.endswith('.gz'):
                 csvfile = gzip.open(filepath, 'rb')
             else:
                 csvfile = open(filepath, 'rb')
