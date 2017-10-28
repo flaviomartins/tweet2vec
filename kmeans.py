@@ -43,6 +43,7 @@ def iter_sentences(sentences):
     n_workers=("Number of workers", "option", "n", int),
     nr_clusters=("Number of clusters", "option", "t", int),
     nr_iter=("Number of iterations", "option", "i", int),
+    nr_init=("Number of times the k-means algorithm will be run with different centroid seeds.", "option", "r", int),
     batch_size=("Batch size", "option", "c", int),
     job_size=("Job size in number of lines", "option", "j", int),
     max_docs=("Limit maximum number of documents", "option", "L", int),
@@ -61,7 +62,7 @@ def iter_sentences(sentences):
     a=("JM smoothing lambda for KLD metric.", "option", "a", float),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
-def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100,
+def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000, nr_iter=100, nr_init=1,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, max_features=10000, delta=.001, no_minibatch=False,
          binary_tf=False, sublinear_tf=False, no_idf=False, cosine=False, jsd=False, nkl=False, a=.7, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
@@ -124,12 +125,12 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     t0 = time()
     if no_minibatch:
-        km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=1,
+        km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
                     max_no_improvement=2,
                     metric=metric, metric_kwargs={'a': a},
                     tol=delta, verbose=True)
     else:
-        km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=1,
+        km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
                              max_no_improvement=iterations, compute_labels=True,
                              metric=metric, metric_kwargs={'a': a},
                              init_size=None, batch_size=batchsize, tol=delta, verbose=True)
