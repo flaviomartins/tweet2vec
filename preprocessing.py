@@ -2,12 +2,12 @@
 
 import re
 from twokenize import twokenize
-from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
 from gensim import utils
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 
-stops = set(stopwords.words('english'))  # nltk stopwords list
+stops = ENGLISH_STOP_WORDS  # sklearn stopwords list (modified Glasgow)
 stemmer = PorterStemmer()
 
 # Additionally, these things are "filtered", meaning they shouldn't appear on the final token list.
