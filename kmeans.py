@@ -126,12 +126,12 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     t0 = time()
     if no_minibatch:
         km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
-                    max_no_improvement=2,
+                    max_no_improvement=iterations / 10,
                     metric=metric, metric_kwargs={'a': a},
                     tol=delta, verbose=True)
     else:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
-                             max_no_improvement=iterations, compute_labels=True,
+                             max_no_improvement=iterations / 10, compute_labels=True,
                              metric=metric, metric_kwargs={'a': a},
                              init_size=None, batch_size=batchsize, tol=delta, verbose=True)
 
