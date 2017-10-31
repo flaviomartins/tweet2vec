@@ -26,7 +26,7 @@ Filtered = re.compile(
         twokenize.arbitraryAbbrev,
         twokenize.separators,
         twokenize.decorations,
-        # twokenize.embeddedApostrophe,
+        twokenize.embeddedApostrophe,
         # twokenize.Hashtag,
         twokenize.AtMention,
         "(?:RT|rt)"
@@ -64,7 +64,6 @@ def process_texts(texts, lemmatize=False, stem=True):
                      ] for line in texts
                  ]
     else:
-        texts = [[token.replace("'s", "") for token in line] for line in texts]
         if stem:
             texts = [[
                         token if token.startswith("#") else stemmer.stem(token) for token in line
