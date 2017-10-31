@@ -20,7 +20,7 @@ from multiprocessing import cpu_count
 
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
-# from tcluster.cluster import nearestcentres
+from tcluster.cluster.k_means_ import nearestcentres
 from tcluster.metrics.nkl import nkl_transform
 
 logger = logging.getLogger(__name__)
@@ -122,19 +122,16 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     terms = count_vect.get_feature_names()
     for i in range(centres.shape[0]):
-        print("%d" % i, end='')
-        for ind in order_centroids[i, :10]:
-            print(' %s' % terms[ind], end='')
-        print()
+        logger.info('%d %s' % (i, ' '.join([terms[ind] for ind in order_centroids[i, :10]])))
 
-    # sents = iter_sentences(sentences)
-    # for group in grouper(job_size * n_workers, sents):
-    #     X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
-    #     X = tf_transformer.transform(X)
-    #     C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
-    #     for sentence, c in zip(group, C):
-    #         tid = sentence[0]
-    #         print(u"{} {}".format(tid, c))
+    sents = iter_sentences(sentences)
+    for group in grouper(job_size * n_workers, sents):
+        X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
+        X = tf_transformer.transform(X)
+        C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
+        for sentence, c in zip(group, C):
+            tid = sentence[0]
+            print(u"{} {}".format(tid, c))
 
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
 
