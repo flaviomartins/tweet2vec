@@ -125,7 +125,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         logger.info('%d %s' % (i, ' '.join([terms[ind] for ind in order_centroids[i, :10]])))
 
     sents = iter_sentences(sentences)
-    for group in grouper(job_size * n_workers, sents):
+    for group in grouper(batchsize * n_workers, sents):
         X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
         X = tf_transformer.transform(X)
         C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
