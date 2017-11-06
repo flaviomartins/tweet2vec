@@ -122,7 +122,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     terms = count_vect.get_feature_names()
     for i in range(centres.shape[0]):
-        logger.info('%d %s' % (i, ' '.join([terms[ind] for ind in order_centroids[i, :20]])))
+        print('%d %s' % (i, ' '.join([terms[ind] for ind in order_centroids[i, :20]])))
 
     sents = iter_sentences(sentences)
     for group in grouper(batchsize * n_workers, sents):
