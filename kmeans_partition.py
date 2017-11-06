@@ -120,7 +120,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         cluster_centers_ = centres
 
     order_centroids = cluster_centers_.argsort()[:, ::-1]
-
     terms = count_vect.get_feature_names()
 
     with io.open(out_loc + '_topwords.txt', 'wt', encoding='utf-8') as f:
