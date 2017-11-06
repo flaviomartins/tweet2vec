@@ -18,12 +18,13 @@ import six
 from gensim import utils
 from multiprocessing import cpu_count
 
-from sklearn.utils import as_float_array
-
+import io
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
 from tcluster.cluster.k_means_ import nearestcentres, _labels_inertia, pairwise_distances_sparse
 from tcluster.metrics.nkl import nkl_transform, nkl_metric
+
+from sklearn.utils import as_float_array
 
 logger = logging.getLogger(__name__)
 
@@ -164,8 +165,12 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
 
     # sort by best inertia
     order_cluster = cluster_inertia_.argsort()
-    for i in range(centres.shape[0]):
-        logger.info('%d %s' % (order_cluster[i], ' '.join([terms[ind] for ind in order_centroids[order_cluster[i], :10]])))
+    with io.open(out_loc + '_topwords_sorted.txt', 'wt', encoding='utf-8') as f:
+        for i in range(num_clusters):
+            f.write(u'{:d}'.format(order_cluster[i]))
+            for ind in order_centroids[order_cluster[i], :20]:
+                f.write(u' {}'.format(terms[ind]))
+            f.write(u'\n')
 
     sents = iter_sentences1(sentences)
     for group in grouper(batchsize * n_workers, sents):
