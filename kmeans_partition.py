@@ -18,11 +18,12 @@ import six
 from gensim import utils
 from multiprocessing import cpu_count
 
-import io
+from sklearn.utils import as_float_array
+
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
-from tcluster.cluster.k_means_ import nearestcentres
-from tcluster.metrics.nkl import nkl_transform
+from tcluster.cluster.k_means_ import nearestcentres, _labels_inertia, pairwise_distances_sparse
+from tcluster.metrics.nkl import nkl_transform, nkl_metric
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,16 @@ def split_on_space(text):
 
 
 def iter_sentences(sentences):
+    for tid, raw, sentence in sentences:
+        unicode_sentence = []
+        for token in sentence:
+            if isinstance(token, six.binary_type):
+                token = token.decode('utf-8')
+            unicode_sentence.append(token)
+        yield ' '.join([token for token in unicode_sentence])
+
+
+def iter_sentences1(sentences):
     for tid, raw, sentence in sentences:
         unicode_sentence = []
         for token in sentence:
@@ -112,7 +123,36 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     terms = count_vect.get_feature_names()
     centres = np.load(out_loc + '_centres.npy')
     # centres = np.loadtxt(out_loc + '_centres.txt')
-    centres_mean = centres.mean(axis=0)
+
+    X_train_counts = count_vect.fit_transform(iter_sentences(sentences))
+
+    if nkl:
+        logger.info("Using Negative Kullback-Liebler metric")
+        logger.info('TfidfTransformer')
+        X_train_tf = tf_transformer.fit_transform(X_train_counts)
+        metric = 'nkl'
+
+    logger.info('Per-cluster inertia')
+    n_samples = X_train_tf.shape[0]
+    # set the default value of centers to -1 to be able to detect any anomaly
+    # easily
+    labels = -np.ones(n_samples, np.int32)
+    centers_mean = centres.mean(axis=0)
+    nkl_kwargs = {'p_B': as_float_array(centers_mean, copy=True)}
+    logger.info('Pairwise distances')
+    D = pairwise_distances_sparse(
+        X=X_train_tf, Y=centres, metric=nkl_metric, metric_kwargs=nkl_kwargs)
+    logger.info('Pairwise distances end')
+    labels = D.argmin(axis=1)
+    mindist = D[np.arange(n_samples), labels]
+    # cython k-means code assumes int32 inputs
+    labels = labels.astype(np.int32)
+    inertia = np.abs(mindist).sum()  # abs is needed to select best_centers iteration
+
+    n_centers = centres.shape[0]
+    cluster_inertia_ = np.zeros(shape=(n_centers,), dtype=X_train_tf.dtype)
+    for i in range(n_centers):
+        cluster_inertia_[i] = np.abs(mindist[np.where(labels == i)]).sum()
 
     if metric in ['nkl', 'negative-kullback-leibler']:
         cluster_centers_ = nkl_transform(centres, a=.7)
@@ -122,18 +162,16 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     order_centroids = cluster_centers_.argsort()[:, ::-1]
     terms = count_vect.get_feature_names()
 
-    with io.open(out_loc + '_topwords.txt', 'wt', encoding='utf-8') as f:
-        for i in range(num_clusters):
-            f.write(u'{:d}'.format(i))
-            for ind in order_centroids[i, :20]:
-                f.write(u' {}'.format(terms[ind]))
-            f.write(u'\n')
+    # sort by best inertia
+    order_cluster = cluster_inertia_.argsort()
+    for i in range(centres.shape[0]):
+        logger.info('%d %s' % (order_cluster[i], ' '.join([terms[ind] for ind in order_centroids[order_cluster[i], :10]])))
 
-    sents = iter_sentences(sentences)
+    sents = iter_sentences1(sentences)
     for group in grouper(batchsize * n_workers, sents):
         X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
         X = tf_transformer.transform(X)
-        C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centres_mean)
+        C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centers_mean)
         for sentence, c in zip(group, C):
             tid = sentence[0]
             print(u"{} {}".format(tid, c))
