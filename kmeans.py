@@ -111,7 +111,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     elif cosine:
         logger.info('Using cosine distances')
         logger.info('TfidfTransformer')
-        tf_transformer = TfidfTransformer(norm='l1', use_idf=use_idf, smooth_idf=True,
+        tf_transformer = TfidfTransformer(norm='l2', use_idf=use_idf, smooth_idf=True,
                                           sublinear_tf=sublinear_tf)  # sublinear_tf -> tf = 1 + log(tf)
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = 'cosine'
