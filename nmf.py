@@ -95,7 +95,10 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, nr_iter=100,
         nmf = NMF(n_components=num_clusters, max_iter=iterations, random_state=1, verbose=verbose,
                   alpha=.1, l1_ratio=.5)
 
-    nmf.fit(tfidf)
+    W = nmf.fit_transform(tfidf)
+    H = nmf.components_
+
+    labels_ = W.argmax(axis=1)
 
     terms = vectorizer.get_feature_names()
 
