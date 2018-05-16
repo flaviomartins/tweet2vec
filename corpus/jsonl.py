@@ -7,14 +7,8 @@ from builtins import object
 import bz2
 import gzip
 import io
-import six
-
-try:
-    import ujson
-except ImportError:
-    import json as ujson
 import json
-
+import six
 import logging
 import itertools
 import multiprocessing
@@ -105,19 +99,19 @@ def process_file(args):
                     logger.warning('DECODE FAIL: %s %s', filepath, ude.message)
                     continue
             try:
-                data = ujson.loads(line)
-            except ValueError:
-                try:
-                    data = json.loads(line)
-                except ValueError as ve:
-                    logger.warning('DECODE FAIL: %s %s', filepath, ve)
-                    continue
-            if 'id' in data:
+                data = json.loads(line)
+            except ValueError as ve:
+                logger.warning('DECODE FAIL: %s %s', filepath, ve)
+                continue
+            if 'id' in data and data['lang'] == 'en':
                 tid = data['id']
-                if 'text' in data:
+                if 'full_text' in data or 'text' in data:
                     tids.append(tid)
                     raws.append(line)
-                    texts.append(twokenize.tokenizeRawTweetText(data['text']))
+                    if 'full_text' in data:
+                        texts.append(twokenize.tokenizeRawTweetText(data['full_text']))
+                    else:
+                        texts.append(twokenize.tokenizeRawTweetText(data['text']))
         f.close()
         return tids, raws, process_texts(texts, lemmatize=lemmatize)
     except Exception:

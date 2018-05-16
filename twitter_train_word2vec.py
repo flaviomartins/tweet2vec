@@ -5,6 +5,7 @@ from __future__ import print_function
 
 import bz2
 import io
+import json
 import logging
 import tarfile
 from multiprocessing import cpu_count
@@ -22,12 +23,6 @@ except ImportError:
     from os import scandir, walk
 import fnmatch
 import plac
-
-try:
-    import ujson
-except ImportError:
-    import json as ujson
-import json
 
 from gensim.models import Word2Vec
 from gensim import utils
@@ -128,14 +123,14 @@ def process_line(line):
             logger.warning('DECODE FAIL: %s', ude.message)
             return None
     try:
-        data = ujson.loads(line)
-    except ValueError:
-        try:
-            data = json.loads(line)
-        except ValueError as ve:
-            data = ''
-            logger.warning('DECODE FAIL: %s', ve)
-    if 'text' in data:
+        data = json.loads(line)
+    except ValueError as ve:
+        data = ''
+        logger.warning('DECODE FAIL: %s', ve)
+
+    if 'full_text' in data:
+        return twokenize.tokenizeRawTweetText(data['full_text'])
+    elif 'text' in data:
         return twokenize.tokenizeRawTweetText(data['text'])
     else:
         return None
