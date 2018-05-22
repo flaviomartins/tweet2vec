@@ -170,7 +170,7 @@ def main(in_dir, out_loc, qrels=None, n_workers=cpu_count()-1, nr_clusters=10, b
         cluster_inertia_[i] = np.abs(mindist[np.where(labels == i)]).sum()
 
     if metric in ['nkl', 'negative-kullback-leibler']:
-        cluster_centers_ = nkl_transform(centers, a=.7)
+        cluster_centers_ = nkl_transform(centers, a=a)
     else:
         cluster_centers_ = centers
 
