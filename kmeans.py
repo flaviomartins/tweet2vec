@@ -123,7 +123,6 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = "euclidean"
 
-    t0 = time()
     if no_minibatch:
         km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
                     max_no_improvement=iterations / 10,
