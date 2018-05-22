@@ -19,9 +19,13 @@ from gensim import utils
 from multiprocessing import cpu_count
 
 import io
+
+from sklearn.metrics import pairwise_distances_argmin_min
+
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
 from tcluster.cluster.k_means_ import nearestcentres, _labels_inertia, pairwise_distances_sparse
+from tcluster.metrics import jensen_shannon_divergence
 from tcluster.metrics.nkl import nkl_transform, nkl_metric
 
 from sklearn.utils import as_float_array
@@ -101,6 +105,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     if nkl:
         logger.info("Using Negative Kullback-Liebler metric")
         metric = 'nkl'
+        metric_kwargs = {'a': 0.7}
     elif jsd:
         logger.info('Using Jensen-Shannon divergence')
         metric = 'jsd'
@@ -110,6 +115,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     else:
         logger.info('Using euclidean distances')
         metric = "euclidean"
+        metric_kwargs = {'squared': True}
 
     t0 = time()
     logger.info("Kmeans Partitioning")
@@ -122,43 +128,54 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         tf_transformer = pickle.load(tf)
 
     terms = count_vect.get_feature_names()
-    centres = np.load(out_loc + '_centres.npy')
+    centers = np.load(out_loc + '_centres.npy')
     # centres = np.loadtxt(out_loc + '_centres.txt')
 
     X_train_counts = count_vect.fit_transform(iter_sentences(sentences))
-
-    if nkl:
-        logger.info("Using Negative Kullback-Liebler metric")
-        logger.info('TfidfTransformer')
-        X_train_tf = tf_transformer.fit_transform(X_train_counts)
-        metric = 'nkl'
+    logger.info('TfidfTransformer')
+    X = tf_transformer.fit_transform(X_train_counts)
 
     logger.info('Per-cluster inertia')
-    n_samples = X_train_tf.shape[0]
-    # set the default value of centers to -1 to be able to detect any anomaly
-    # easily
-    labels = -np.ones(n_samples, np.int32)
-    centers_mean = centres.mean(axis=0)
-    nkl_kwargs = {'p_B': as_float_array(centers_mean, copy=True)}
-    logger.info('Pairwise distances')
-    D = pairwise_distances_sparse(
-        X=X_train_tf, Y=centres, metric=nkl_metric, metric_kwargs=nkl_kwargs)
-    logger.info('Pairwise distances end')
-    labels = D.argmin(axis=1)
-    mindist = D[np.arange(n_samples), labels]
+    n_samples = X.shape[0]
+
+    # Breakup nearest neighbor distance computation into batches to prevent
+    # memory blowup in the case of a large number of samples and clusters.
+    # TODO: Once PR #7383 is merged use check_inputs=False in metric_kwargs.
+    if metric == 'euclidean':
+        labels, mindist = pairwise_distances_argmin_min(
+            X=X, Y=centers, metric='euclidean', metric_kwargs={'squared': True})
+    elif metric in ['jsd', 'jensen-shannon']:
+        D = pairwise_distances_sparse(
+            X=X, Y=centers, metric=jensen_shannon_divergence)
+        labels = D.argmin(axis=1)
+        mindist = D[np.arange(n_samples), labels]
+    elif metric in ['nkl', 'negative-kullback-leibler']:
+        centers_mean = centers.mean(axis=0)
+        nkl_kwargs = {'p_B': as_float_array(centers_mean, copy=True)}
+        if metric_kwargs is not None:
+            nkl_kwargs.update(metric_kwargs)
+        D = pairwise_distances_sparse(
+            X=X, Y=centers, metric=nkl_metric, metric_kwargs=nkl_kwargs)
+        labels = D.argmin(axis=1)
+        mindist = D[np.arange(n_samples), labels]
+    else:
+        if metric == 'cosine':
+            metric_kwargs = None
+        labels, mindist = pairwise_distances_argmin_min(
+            X=X, Y=centers, metric=metric, metric_kwargs=metric_kwargs)
     # cython k-means code assumes int32 inputs
     labels = labels.astype(np.int32)
     inertia = np.abs(mindist).sum()  # abs is needed to select best_centers iteration
 
-    n_centers = centres.shape[0]
-    cluster_inertia_ = np.zeros(shape=(n_centers,), dtype=X_train_tf.dtype)
+    n_centers = centers.shape[0]
+    cluster_inertia_ = np.zeros(shape=(n_centers,), dtype=X.dtype)
     for i in range(n_centers):
         cluster_inertia_[i] = np.abs(mindist[np.where(labels == i)]).sum()
 
     if metric in ['nkl', 'negative-kullback-leibler']:
-        cluster_centers_ = nkl_transform(centres, a=.7)
+        cluster_centers_ = nkl_transform(centers, a=.7)
     else:
-        cluster_centers_ = centres
+        cluster_centers_ = centers
 
     order_centroids = cluster_centers_.argsort()[:, ::-1]
     terms = count_vect.get_feature_names()
@@ -176,7 +193,7 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
     for group in grouper(batchsize * n_workers, sents):
         X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
         X = tf_transformer.transform(X)
-        C = nearestcentres(X, centres, metric=metric, precomputed_centres_mean=centers_mean)
+        C = nearestcentres(X, centers, metric=metric, a=.7)
         for sentence, c in zip(group, C):
             tid = sentence[0]
             print(u"{} {}".format(tid, c))
