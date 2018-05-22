@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 
+import csv
 from itertools import izip_longest
 
 from builtins import zip
@@ -21,12 +22,13 @@ from multiprocessing import cpu_count
 import io
 
 from sklearn.metrics import pairwise_distances_argmin_min
+from sklearn import metrics
 
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
 from tcluster.cluster.k_means_ import nearestcenters, pairwise_distances_sparse
 from tcluster.metrics import jensen_shannon_divergence
-from tcluster.metrics.nkl import nkl_transform, nkl_metric
+from tcluster.metrics import nkl_transform, nkl_metric, purity_score
 
 from sklearn.utils import as_float_array
 
@@ -60,6 +62,7 @@ def iter_sentences1(sentences):
 @plac.annotations(
     in_dir=("Location of input directory"),
     out_loc=("Location of output file"),
+    qrels=("Qrels location.", "option", "qrels", str),
     n_workers=("Number of workers", "option", "n", int),
     nr_clusters=("Number of clusters", "option", "t", int),
     batch_size=("Batch size", "option", "c", int),
@@ -75,7 +78,7 @@ def iter_sentences1(sentences):
     a=("JM smoothing lambda for KLD metric.", "option", "a", float),
     verbose=("Print progress reports inside k-means algorithm.", "flag", "v", bool)
 )
-def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000,
+def main(in_dir, out_loc, qrels=None, n_workers=cpu_count()-1, nr_clusters=10, batch_size=1000,
          job_size=1, max_docs=None, fformat='jsonl', no_lemmas=False, no_minibatch=False,
          cosine=False, jsd=False, nkl=False, a=.7, verbose=False):
     logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
@@ -183,6 +186,14 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                 f.write(u' {}'.format(terms[ind]))
             f.write(u'\n')
 
+    qid_map = {}
+    if qrels is not None:
+        with io.open(qrels, 'rt') as f:
+            reader = csv.reader(f, delimiter=' ')
+            for row in reader:
+                qid_map[int(row[2])] = int(row[0])
+
+    km_labels_, labels_ = [], []
     sents = iter_sentences1(sentences)
     for group in grouper(batchsize * n_workers, sents):
         X = count_vect.transform([sentence[2] for sentence in group if sentence is not None])
@@ -190,9 +201,27 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         C = nearestcenters(X, centers, metric=metric, a=a)
         for sentence, c in zip(group, C):
             tid = sentence[0]
+            km_labels_.append(c)
+            labels_.append(qid_map[tid])
             print(u"{} {}".format(tid, c))
 
+
     logger.info("Kmeans Partitioning: %.0f msec" % ((time() - t0) * 1000))
+
+    print()
+    print("Cluster sizes: %s" % np.bincount(labels))
+    if qrels is not None:
+        km_labels_ = np.array(km_labels_)
+        labels = np.array(labels_)
+        print("Purity: %0.3f" % purity_score(labels, km_labels_))
+        homogeneity, completeness, v_measure_score = metrics.homogeneity_completeness_v_measure(labels, km_labels_)
+        print("NMI: %0.3f" % v_measure_score)
+        print("ARI: %0.3f" % metrics.adjusted_rand_score(labels, km_labels_))
+        print("AMI: %0.3f" % metrics.adjusted_mutual_info_score(labels, km_labels_))
+        print("Homogeneity: %0.3f" % homogeneity)
+        print("Completeness: %0.3f" % completeness)
+
+    print()
 
 
 def grouper(n, iterable, fillvalue=None):
