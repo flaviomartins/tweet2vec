@@ -150,8 +150,8 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
                 f.write(u' {}'.format(terms[ind]))
             f.write(u'\n')
 
-    np.save(out_loc + '_centres.npy', km.cluster_centers_)
-    np.savetxt(out_loc + '_centres.txt', km.cluster_centers_)
+    np.save(out_loc + '_centers.npy', km.cluster_centers_)
+    np.savetxt(out_loc + '_centers.txt', km.cluster_centers_)
 
     with open(out_loc + '_count_vect.pk', 'wb') as cv:
         pickle.dump(count_vect, cv)
