@@ -103,7 +103,7 @@ def process_file(args):
             except ValueError as ve:
                 logger.warning('DECODE FAIL: %s %s', filepath, ve)
                 continue
-            if 'id' in data and data['lang'] == 'en':
+            if 'id' in data:
                 tid = data['id']
                 if 'full_text' in data or 'text' in data:
                     tids.append(tid)
