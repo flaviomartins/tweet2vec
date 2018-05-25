@@ -27,7 +27,7 @@ from sklearn import metrics
 from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
 from tcluster.cluster.k_means_ import nearestcenters, pairwise_distances_sparse
-from tcluster.metrics import jensen_shannon_divergence
+from tcluster.metrics import jensenshannon_distance
 from tcluster.metrics import nkl_transform, nkl_metric, purity_score
 
 from sklearn.utils import as_float_array
@@ -141,9 +141,9 @@ def main(in_dir, out_loc, qrels=None, n_workers=cpu_count()-1, nr_clusters=10, b
     if metric == 'euclidean':
         labels, mindist = pairwise_distances_argmin_min(
             X=X, Y=centers, metric='euclidean', metric_kwargs={'squared': True})
-    elif metric in ['jsd', 'jensen-shannon']:
+    elif metric in ['jsd', 'jensenshannon']:
         D = pairwise_distances_sparse(
-            X=X, Y=centers, metric=jensen_shannon_divergence)
+            X=X, Y=centers, metric=jensenshannon_distance)
         labels = D.argmin(axis=1)
         mindist = D[np.arange(n_samples), labels]
     elif metric in ['nkl', 'negative-kullback-leibler']:
