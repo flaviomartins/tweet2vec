@@ -28,7 +28,8 @@ from corpus.csv import CsvDirSentences
 from corpus.jsonl import JsonlDirSentences
 from tcluster.cluster.k_means_ import nearestcenters, pairwise_distances_sparse
 from tcluster.metrics import jensenshannon_distance
-from tcluster.metrics import nkl_transform, nkl_metric, purity_score
+from tcluster.metrics import nkl_transform, nkl_distance, purity_score
+
 
 from sklearn.utils import as_float_array
 
@@ -152,7 +153,7 @@ def main(in_dir, out_loc, qrels=None, n_workers=cpu_count()-1, nr_clusters=10, b
         if metric_kwargs is not None:
             nkl_kwargs.update(metric_kwargs)
         D = pairwise_distances_sparse(
-            X=X, Y=centers, metric=nkl_metric, metric_kwargs=nkl_kwargs)
+            X=X, Y=centers, metric=nkl_distance, metric_kwargs=nkl_kwargs)
         labels = D.argmin(axis=1)
         mindist = D[np.arange(n_samples), labels]
     else:
