@@ -123,15 +123,16 @@ def main(in_dir, out_loc, n_workers=cpu_count()-1, nr_clusters=10, batch_size=10
         X_train_tf = tf_transformer.fit_transform(X_train_counts)
         metric = "euclidean"
 
+    metric_kwargs = {'a': a} if metric in ['nkl', 'negative-kullback-leibler'] else None
     if no_minibatch:
         km = KMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
                     max_no_improvement=iterations / 10,
-                    metric=metric, metric_kwargs={'a': a},
+                    metric=metric, metric_kwargs=metric_kwargs,
                     tol=delta, verbose=True)
     else:
         km = MiniBatchKMeans(n_clusters=num_clusters, init='random', max_iter=iterations, n_init=nr_init,
                              max_no_improvement=iterations / 10, compute_labels=True,
-                             metric=metric, metric_kwargs={'a': a},
+                             metric=metric, metric_kwargs=metric_kwargs,
                              init_size=None, batch_size=batchsize, tol=delta, verbose=True)
 
     logger.info("Clustering sparse data with %s" % km)
